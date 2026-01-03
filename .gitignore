@@ -1,0 +1,44 @@
+# Data
+data/
+ptb-xl-a-large-publicly-available-electrocardiography-dataset-1.0.3/
+a-large-scale-12-lead-electrocardiogram-database-for-arrhythmia-study-1.0.0/
+mit-bih-arrhythmia-database-1.0.0/
+*.dat
+*.mat
+*.hea
+*.atr
+*.h5
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Hydra
+# outputs/
+multirun/
+.hydra/
+multirun/
+.hydra/
+
+# IDE
+.idea/
+.vscode/
+*.swp

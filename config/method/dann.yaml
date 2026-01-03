@@ -1,0 +1,3 @@
+_target_: src.methods.dann.DANN
+num_domains: 2 # PTB-XL vs Chapman
+alpha: 1.0

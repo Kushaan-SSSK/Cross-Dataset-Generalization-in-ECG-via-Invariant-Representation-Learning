@@ -1,0 +1,6 @@
+
+_target_: src.models.resnet1d.ResNet1d
+input_channels: 12
+num_classes: 7
+layers: [2, 2, 2, 2]
+planes: [64, 128, 256, 512]

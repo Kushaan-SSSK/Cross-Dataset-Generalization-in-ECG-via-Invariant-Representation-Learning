@@ -1,0 +1,14 @@
+torch
+torchvision
+torchaudio
+hydra-core==1.2.0
+pandas
+numpy
+scipy
+scikit-learn
+tqdm
+wfdb
+h5py
+matplotlib
+seaborn
+umap-learn

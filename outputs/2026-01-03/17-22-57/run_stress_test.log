@@ -1,0 +1,19 @@
+[2026-01-03 17:22:58,031][__main__][INFO] - Starting Stress Testing...
+[2026-01-03 17:22:59,529][__main__][INFO] - Loaded checkpoint from best_model_vrex.pt
+[2026-01-03 17:22:59,532][__main__][INFO] - Running Test: clean (Level 0.0)
+[2026-01-03 17:23:46,752][__main__][INFO] - Result: {'perturbation': 'clean', 'level': 0.0, 'acc': 0.8998500749625188, 'f1': 0.8342122409242281}
+[2026-01-03 17:23:46,753][__main__][INFO] - Running Test: noise (Level 0.05)
+[2026-01-03 17:24:34,958][__main__][INFO] - Result: {'perturbation': 'noise', 'level': 0.05, 'acc': 0.8989505247376312, 'f1': 0.8341818634994044}
+[2026-01-03 17:24:34,963][__main__][INFO] - Running Test: noise (Level 0.1)
+[2026-01-03 17:25:17,072][__main__][INFO] - Result: {'perturbation': 'noise', 'level': 0.1, 'acc': 0.8947526236881559, 'f1': 0.8305997352407053}
+[2026-01-03 17:25:17,072][__main__][INFO] - Running Test: noise (Level 0.2)
+[2026-01-03 17:25:31,535][__main__][INFO] - Result: {'perturbation': 'noise', 'level': 0.2, 'acc': 0.8632683658170914, 'f1': 0.7729017323728496}
+[2026-01-03 17:25:31,535][__main__][INFO] - Running Test: wander (Level 0.1)
+[2026-01-03 17:25:44,902][__main__][INFO] - Result: {'perturbation': 'wander', 'level': 0.1, 'acc': 0.8986506746626687, 'f1': 0.8351336614721075}
+[2026-01-03 17:25:44,902][__main__][INFO] - Running Test: wander (Level 0.3)
+[2026-01-03 17:25:59,681][__main__][INFO] - Result: {'perturbation': 'wander', 'level': 0.3, 'acc': 0.8967016491754123, 'f1': 0.831042199037861}
+[2026-01-03 17:25:59,681][__main__][INFO] - Running Test: dropout (Level 0.1)
+[2026-01-03 17:26:13,967][__main__][INFO] - Result: {'perturbation': 'dropout', 'level': 0.1, 'acc': 0.883208395802099, 'f1': 0.8080444821470721}
+[2026-01-03 17:26:13,968][__main__][INFO] - Running Test: dropout (Level 0.5)
+[2026-01-03 17:26:44,610][__main__][INFO] - Result: {'perturbation': 'dropout', 'level': 0.5, 'acc': 0.6937031484257871, 'f1': 0.603665365963563}
+[2026-01-03 17:26:44,653][__main__][INFO] - Saved results_vrex.csv

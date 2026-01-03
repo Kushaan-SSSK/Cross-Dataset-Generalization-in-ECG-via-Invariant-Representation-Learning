@@ -1,0 +1,3 @@
+_target_: src.methods.vrex.VREx
+beta: 10.0
+annealing_epochs: 10

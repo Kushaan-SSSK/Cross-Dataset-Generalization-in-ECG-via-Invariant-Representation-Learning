@@ -1,0 +1,104 @@
+[2026-01-03 17:27:06,061][__main__][INFO] - Training Config: 
+seed: 42
+debug: false
+data:
+  paths:
+    ptbxl: C:/Users/kusha/Downloads/Cross-Dataset Generalization in ECG via Invariant
+      Representation Learning/ptb-xl-a-large-publicly-available-electrocardiography-dataset-1.0.3
+    chapman: C:/Users/kusha/Downloads/Cross-Dataset Generalization in ECG via Invariant
+      Representation Learning/a-large-scale-12-lead-electrocardiogram-database-for-arrhythmia-study-1.0.0
+    mitbih: C:/Users/kusha/Downloads/Cross-Dataset Generalization in ECG via Invariant
+      Representation Learning/mit-bih-arrhythmia-database-1.0.0
+    manifest_path: C:/Users/kusha/Downloads/Cross-Dataset Generalization in ECG via
+      Invariant Representation Learning/data/manifests/master_manifest.csv
+    processed_path: C:/Users/kusha/Downloads/Cross-Dataset Generalization in ECG via
+      Invariant Representation Learning/data/processed/signals.h5
+    split_path: C:/Users/kusha/Downloads/Cross-Dataset Generalization in ECG via Invariant
+      Representation Learning/data/manifests/splits.json
+  splits:
+    train: 0.7
+    val: 0.1
+  seed: 42
+  sampling_rate: 100
+model:
+  _target_: src.models.resnet1d.ResNet1d
+  input_channels: 12
+  num_classes: 7
+  layers:
+  - 2
+  - 2
+  - 2
+  - 2
+  planes:
+  - 64
+  - 128
+  - 256
+  - 512
+method:
+  _target_: src.methods.erm.ERM
+train:
+  epochs: 50
+  batch_size: 64
+  lr: 0.001
+  weight_decay: 0.0001
+  optimizer: AdamW
+
+[2026-01-03 17:27:06,154][__main__][INFO] - Loading Manifest and Splits...
+[2026-01-03 17:27:06,155][__main__][INFO] - Loading Manifest and Splits...
+[2026-01-03 17:27:06,267][__main__][INFO] - Train Size: 46861, Val Size: 6675
+[2026-01-03 17:27:06,287][__main__][INFO] - Filtering for sources: ['ptbxl', 'chapman']
+[2026-01-03 17:27:06,295][__main__][INFO] - Filtered Train Size: 46828, Val Size: 6670
+[2026-01-03 17:27:06,653][__main__][INFO] - Instantiating Model...
+[2026-01-03 17:27:06,682][__main__][INFO] - Instantiating Method: src.methods.erm.ERM
+[2026-01-03 17:28:55,081][__main__][INFO] - Training Config: 
+seed: 42
+debug: false
+data:
+  paths:
+    ptbxl: C:/Users/kusha/Downloads/Cross-Dataset Generalization in ECG via Invariant
+      Representation Learning/ptb-xl-a-large-publicly-available-electrocardiography-dataset-1.0.3
+    chapman: C:/Users/kusha/Downloads/Cross-Dataset Generalization in ECG via Invariant
+      Representation Learning/a-large-scale-12-lead-electrocardiogram-database-for-arrhythmia-study-1.0.0
+    mitbih: C:/Users/kusha/Downloads/Cross-Dataset Generalization in ECG via Invariant
+      Representation Learning/mit-bih-arrhythmia-database-1.0.0
+    manifest_path: C:/Users/kusha/Downloads/Cross-Dataset Generalization in ECG via
+      Invariant Representation Learning/data/manifests/master_manifest.csv
+    processed_path: C:/Users/kusha/Downloads/Cross-Dataset Generalization in ECG via
+      Invariant Representation Learning/data/processed/signals.h5
+    split_path: C:/Users/kusha/Downloads/Cross-Dataset Generalization in ECG via Invariant
+      Representation Learning/data/manifests/splits.json
+  splits:
+    train: 0.7
+    val: 0.1
+  seed: 42
+  sampling_rate: 100
+model:
+  _target_: src.models.resnet1d.ResNet1d
+  input_channels: 12
+  num_classes: 7
+  layers:
+  - 2
+  - 2
+  - 2
+  - 2
+  planes:
+  - 64
+  - 128
+  - 256
+  - 512
+method:
+  _target_: src.methods.erm.ERM
+train:
+  epochs: 30
+  batch_size: 64
+  lr: 0.001
+  weight_decay: 0.0001
+  optimizer: AdamW
+
+[2026-01-03 17:28:55,083][__main__][INFO] - Loading Manifest and Splits...
+[2026-01-03 17:28:55,084][__main__][INFO] - Loading Manifest and Splits...
+[2026-01-03 17:28:55,194][__main__][INFO] - Train Size: 46861, Val Size: 6675
+[2026-01-03 17:28:55,213][__main__][INFO] - Filtering for sources: ['ptbxl', 'chapman']
+[2026-01-03 17:28:55,220][__main__][INFO] - Filtered Train Size: 46828, Val Size: 6670
+[2026-01-03 17:28:55,578][__main__][INFO] - Instantiating Model...
+[2026-01-03 17:28:55,606][__main__][INFO] - Instantiating Method: src.methods.erm.ERM
