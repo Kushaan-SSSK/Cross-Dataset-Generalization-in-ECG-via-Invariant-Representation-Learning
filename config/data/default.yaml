@@ -1,0 +1,24 @@
+# Data Configuration
+
+# Paths to raw data roots (Detected in workspace)
+paths:
+  ptbxl: "C:/Users/kusha/Downloads/Cross-Dataset Generalization in ECG via Invariant Representation Learning/ptb-xl-a-large-publicly-available-electrocardiography-dataset-1.0.3"
+  chapman: "C:/Users/kusha/Downloads/Cross-Dataset Generalization in ECG via Invariant Representation Learning/a-large-scale-12-lead-electrocardiogram-database-for-arrhythmia-study-1.0.0"
+  mitbih: "C:/Users/kusha/Downloads/Cross-Dataset Generalization in ECG via Invariant Representation Learning/mit-bih-arrhythmia-database-1.0.0"
+  
+  # Outputs
+  manifest_path: "C:/Users/kusha/Downloads/Cross-Dataset Generalization in ECG via Invariant Representation Learning/data/manifests/master_manifest.csv"
+  processed_path: "C:/Users/kusha/Downloads/Cross-Dataset Generalization in ECG via Invariant Representation Learning/data/processed/signals.h5"
+  split_path: "C:/Users/kusha/Downloads/Cross-Dataset Generalization in ECG via Invariant Representation Learning/data/manifests/splits.json"
+
+# Split Ratios
+splits:
+  train: 0.7
+  val: 0.1
+  # Test is remainder (0.2)
+
+# Global Seed for reproducibility
+seed: 42
+
+# Preprocessing
+sampling_rate: 100

@@ -20,6 +20,7 @@ from tqdm import tqdm
 from sklearn.model_selection import StratifiedGroupKFold
 
 # Ensure src is in path
+sys.path.append(os.getcwd())
 sys.path.append(os.path.join(os.getcwd(), 'src'))
 try:
     from src.data.mappings import PTBXL_MAPPING, CHAPMAN_MAPPING, TASK_A_LABELS
@@ -261,7 +262,7 @@ def main():
         master.loc[idxs[test_idxs], 'split'] = 'test'
         master.loc[idxs[val_idxs], 'split'] = 'val'
     
-    out_path = main_cfg.paths.manifest
+    out_path = main_cfg.paths.manifest_path
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
     master.to_csv(out_path, index=False)
     log.info(f"Saved manifest to {out_path}")
