@@ -1,6 +1,4 @@
-# @package _global_
-method:
-  name: irm
-  num_domains: 2
-  penalty_weight: 100.0
-  annealing_epochs: 10
+_target_: src.methods.irm.IRM
+num_domains: 2
+penalty_weight: 100.0
+annealing_epochs: 10
