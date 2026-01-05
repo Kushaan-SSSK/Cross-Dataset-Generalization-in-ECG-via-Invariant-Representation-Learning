@@ -107,9 +107,11 @@ To mechanisticlly probe regions of failure, we introduce a **Synthetic Frequency
 
 *   **Shortcut Signal:** A sinusoidal wave $s(t) = A \cdot \sin(2\pi f t)$ added to Lead I.
 *   **Parameters:** Frequency $f = 60$ Hz (mimicking power-line interference), Amplitude $A = 0.1$ mV.
-*   **Spurious Correlation:** In the **Training** set, we inject $s(t)$ into 90% of samples where $Y=1$ (Abnormal) and 10% where $Y=0$ (Normal), creating a strong spurious predictor ($P(Y=1 | S=1) = 0.9$). In the **Test** set, we reverse this correlation or remove the signal entirely ($P(S=1)=0$), rendering the shortcut useless.
-
-We measure the **Shortcut Reliance ($SR$)** as the drop in accuracy when the shortcut is removed, quantifying the model's dependency on this non-physiological feature.
+*   **Spurious Correlation Protocol:** We implement this as an on-the-fly augmentation.
+    *   **Training (Poisoned):** We inject $s(t)$ into 90% of samples where $Y=1$ (Abnormal) and 10% where $Y=0$ (Normal). This creates a dataset where the shortcut $S$ is a strong predictor of the label ($P(Y=1 | S=1) = 0.9$).
+    *   **Testing (Clean):** We evaluate on the original, unmodified test set ($P(S=1)=0$).
+    
+We measure the **Shortcut Reliance ($SR$)** as the performance gap between a model trained on clean data vs. a model trained on poisoned data, evaluated on clean test data. A large gap indicates the model learned the shortcut instead of the robust features.
 
 ## 5. Results
 
