@@ -25,6 +25,9 @@ python -m src.train method=dann train.epochs=50 hydra.job.chdir=True hydra.run.d
 # V-REx
 python -m src.train method=vrex train.epochs=50 hydra.job.chdir=True hydra.run.dir=outputs/baselines/vrex_fixed
 
+# IRM (Invariant Risk Minimization)
+python -m src.train method=irm train.epochs=50 hydra.job.chdir=True hydra.run.dir=outputs/baselines/irm_fixed
+
 # Disentangled V2 (Proposed)
 python -m src.train method=disentangled train.epochs=50 hydra.job.chdir=True hydra.run.dir=outputs/baselines/v2
 ```
@@ -40,6 +43,9 @@ python -m src.train method=dann data.shortcut.use_shortcut=true experiment_name=
 
 # V-REx on Poisoned Data
 python -m src.train method=vrex data.shortcut.use_shortcut=true experiment_name=vrex_shortcut hydra.run.dir=outputs/shortcuts/vrex_60hz
+
+# IRM on Poisoned Data
+python -m src.train method=irm data.shortcut.use_shortcut=true experiment_name=irm_shortcut hydra.run.dir=outputs/shortcuts/irm_60hz
 
 # Disentangled on Poisoned Data
 python -m src.train method=disentangled data.shortcut.use_shortcut=true experiment_name=disentangled_shortcut hydra.run.dir=outputs/shortcuts/v2_60hz

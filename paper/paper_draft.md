@@ -11,12 +11,12 @@ This phenomenon suggests that standard training paradigms, such as Empirical Ris
 
 The central challenge in generalizing physiological time-series models lies in disentangling these domain-specific nuiances from the underlying biological signal. While Domain Generalization (DG) has been extensively studied in computer vision—resulting in rigorous benchmarks like DomainBed (Gulrajani & Lopez-Paz, 2021)—the field of biosignal analysis lacks a comparable unified framework. Previous attempts in ECG generalization often focus on limited adaptation scenarios or propose bespoke architectural modifications without isolating the fundamental principles of invariant learning.
 
-In this paper, we address this gap through a systematic and rigorous empirical study of invariant representation learning for ECG. We frame the problem as one of learning a feature representation $\Phi(x)$ that is maximally predictive of the cardiac pathology $Y$ while being statistically independent of the acquisition environment $E$. We benchmark three distinct classes of learning objectives—standard ERM, adversarial invariance induction (DANN), and variance-based regularized risk minimization (V-REx)—across two large-scale, heterogeneous public datasets.
+In this paper, we address this gap through a systematic and rigorous empirical study of invariant representation learning for ECG. We frame the problem as one of learning a feature representation $\Phi(x)$ that is maximally predictive of the cardiac pathology $Y$ while being statistically independent of the acquisition environment $E$. We benchmark four distinct classes of learning objectives—standard ERM, Invariant Risk Minimization (IRM), adversarial invariance induction (DANN), and variance-based regularized risk minimization (V-REx)—across two large-scale, heterogeneous public datasets.
 
 Our contributions are threefold:
 1.  **Systematic Cross-Dataset Benchmark**: We establish a reproducible evaluation protocol using PTB-XL and Chapman-Shaoxing, encompassing over 30,000 patients and distinct device ecosystems (Schiller vs. GE).
 2.  **Controlled Shortcut Diagnosis**: Moving beyond aggregate metrics like accuracy, we construct a "Synthetic Shortcut Benchmark." By injecting controlled, definable artifacts (e.g., specific frequency perturbations) that correlate with labels in the training set but not the test set, we casually quantify the degree to which each method relies on non-physiological signals.
-3.  **Disentangled Representation Proposal**: We introduce a novel "Disentangled Representation Learning" framework that explicitly splits the latent space into "content" (invariant) and "style" (domain-specific) subspaces, offering a mechanistic path toward interpretable robustness.
+3.  **Physio-Invariant Disentanglement (PID) Proposal**: We introduce a novel "Physio-Invariant Disentanglement" (PID) framework that explicitly splits the latent space into "content" (invariant) and "style" (domain-specific) subspaces, offering a mechanistic path toward interpretable robustness.
 
 ## 2. Related Work
 
@@ -70,12 +70,20 @@ $$
 $$
 where $\mathcal{R}_e(\Phi, w)$ is the expected risk in environment $e$. This discourages solutions that overfit to specific domains (low risk in some, high in others) in favor of solution with stable performance.
 
+### 3.4. Invariant Risk Minimization (IRM)
+IRM (Arjovsky et al., 2019) seeks to learn a data representation $\Phi(x)$ such that the optimal linear classifier $w$ on top of that representation is invariant across all environments. The IRMv1 objective minimizes the sum of risks plus a penalty on the gradient norm of the risk with respect to a dummy scalar classifier:
+$$
+\mathcal{L}_{IRM}(\Phi, w) = \sum_{e \in \mathcal{E}_{train}} \mathcal{R}_e(\Phi, w) + \lambda \cdot ||\nabla_{w|w=1.0} \mathcal{R}_e(\Phi, w)||^2
+$$
+This theoretically encourages the learning of features that induce a stable predictor mechanism.
+
 ### Method-Specific Hyperparameters.
 *   **DANN:** The domain discriminator $D_\psi$ is a 3-layer MLP (Input $\to$ 1024 $\to$ 1024 $\to$ $N_{domains}$) with ReLU activations and Dropout (p=0.5). We set the adversarial weight $\lambda$ to 1.0. Gradient Reversal Layer (GRL) scaling is utilized to stabilize minimax training.
 *   **V-REx:** The variance penalty weight $\beta$ is set to 10.0, following extensive hyperparameter sweeps on validation data.
-*   **Disentangled:** We split the 512-dimensional latent space equally into $Z_c$ (256 dim) and $Z_s$ (256 dim).
+*   **IRM:** We set the penalty weight $\lambda_{IRM} = 100.0$ and employ penalty annealing over the first 10 epochs to avoid early divergence.
+*   **PID:** We split the 512-dimensional latent space equally into $Z_c$ (256 dim) and $Z_s$ (256 dim).
 
-### 3.4. Proposed Method: Disentangled Representation Learning
+### 3.5. Proposed Method: Physio-Invariant Disentanglement (PID)
 We propose a method to explicitly disentangle the latent representation $Z$ into two subspaces: $Z_c$ (content, task-relevant) and $Z_s$ (style, domain-specific). We postulate that $Z_c$ should capture physiological features invariant across domains, while $Z_s$ captures local acquisition artifacts.
 
 We enforce this split via a multi-objective loss:
@@ -89,8 +97,18 @@ $$
 $$
 At inference time, only the invariant features $Z_c$ are used for prediction, effectively "filtering out" the dataset-specific noise captured in $Z_s$.
 
-### 3.5. Theoretical Motivation (TODO)
-(Placeholder: Formal analysis of why variance penalties and disentanglement lead to better generalization bounds.)
+### 3.6. Theoretical Motivation: Generalization Bound
+We now theoretically motivate why minimizing the domain-adversarial loss on $Z_c$ reduces the target risk.
+
+**Theorem 1 (Generalization Bound for PID).** Let $\hat{\epsilon}_S(h)$ and $\hat{\epsilon}_T(h)$ be the empirical risk on source and target domains respectively. For a hypothesis class $\mathcal{H}$, the target risk is bounded by:
+$$
+\epsilon_T(h) \leq \epsilon_S(h) + \frac{1}{2}d_{\mathcal{H}\Delta\mathcal{H}}(P_S^Z, P_T^Z) + \lambda
+$$
+Where:
+*   $d_{\mathcal{H}\Delta\mathcal{H}}$ is the divergence between the induced distributions in the latent space $Z$ (Ben-David et al., 2010).
+*   $\lambda$ is the risk of the ideal joint hypothesis (assumed small for realizable physiological tasks).
+
+**Proof Sketch.** By minimizing the domain-adversarial loss, PID directly minimizes the term $d_{\mathcal{H}\Delta\mathcal{H}}(P_S^{Z_c}, P_T^{Z_c})$. Furthermore, by explicitly discarding $Z_s$ during inference, we restrict the hypothesis class $\mathcal{H}$ to features that are statistically independent of the domain $d$. This effectively reduces the complexity of the effective hypothesis space, preventing the model from utilizing "shortcuts" that exist in $P_S$ (e.g., vendor specific noise) but not in $P_T$. Unlike standard ERM, which is free to use any feature in $Z$, PID enforces that the decision boundary must lie in the subspace formed by $Z_c \perp d$.
 
 ## 4. Experimental Setup
 
@@ -133,9 +151,11 @@ We measure the **Shortcut Reliance ($SR$)** as the performance gap between a mod
 
 ## 7. Conclusion and Future Work
 
-In this work, we presented a rigorous evaluation of invariant representation learning for cross-dataset generalization in electrocardiography. By rigorously benchmarking ERM, DANN, V-REx, and our proposed Disentangled Representation learning frameowork across two distinct hospital environments (Germany and China), we demonstrated that standard training paradigms are dangerously prone to shortcut learning. Our findings reveal that while ERM achieves high in-domain accuracy, it crucially relies on non-physiological acquisition artifacts—a vulnerability exposed by our synthetic shortcut benchmark.
+In this work, we presented a rigorous evaluation of invariant representation learning for cross-dataset generalization in electrocardiography. By rigorously benchmarking ERM, IRM, DANN, V-REx, and our proposed Physio-Invariant Disentanglement (PID) framework across two distinct hospital environments (Germany and China), we demonstrated that standard training paradigms are dangerously prone to shortcut learning. Our findings reveal that while ERM achieves high in-domain accuracy, it crucially relies on non-physiological acquisition artifacts—a vulnerability exposed by our synthetic shortcut benchmark.
 
 We show that enforcing statistical invariance, particularly through explicit disentanglement of physiological content and domain style, significantly reduces the generalization gap without requiring target labels. This has profound implications for the deployment of AI in healthcare: robustness to hardware and protocol variations is not merely a technical optimization but a safety requirement.
 
-**Limitations and Future Work.** While our study covers two large-scale datasets, true clinical robustness requires validation across a broader spectrum of patient demographics and device vendors. Future work will focus on integrating these invariant objectives into foundational models pre-trained on millions of unannotated ECGs, extending the framework to multi-label diagnosis, and prospective clinical validation. We hope this study establishes a new standard for evaluating the safety and reliability of physiological time-series models.
+**Limitations and Future Work.** 
+
+While our study covers two large-scale datasets, true clinical robustness requires validation across a broader spectrum of patient demographics and device vendors. Future work will focus on integrating these invariant objectives into foundational models pre-trained on millions of unannotated ECGs, extending the framework to multi-label diagnosis, and prospective clinical validation. We hope this study establishes a new standard for evaluating the safety and reliability of physiological time-series models.
 
