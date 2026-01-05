@@ -78,8 +78,8 @@ def main(cfg: DictConfig):
     log.info(f"Filtered Train Size: {len(train_df)}, Val Size: {len(val_df)}")
     
     # Dataset
-    train_ds = ECGDataset(train_df, cfg.data.paths.processed_path)
-    val_ds = ECGDataset(val_df, cfg.data.paths.processed_path)
+    train_ds = ECGDataset(train_df, cfg.data.paths.processed_path, shortcut_cfg=cfg.data.shortcut, split='train')
+    val_ds = ECGDataset(val_df, cfg.data.paths.processed_path, shortcut_cfg=cfg.data.shortcut, split='val')
     
     # Dataloaders
     train_loader = DataLoader(train_ds, batch_size=cfg.train.batch_size, shuffle=True, num_workers=0, pin_memory=True)

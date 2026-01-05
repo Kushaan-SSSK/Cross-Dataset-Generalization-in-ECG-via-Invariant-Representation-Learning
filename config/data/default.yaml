@@ -22,3 +22,11 @@ seed: 42
 
 # Preprocessing
 sampling_rate: 100
+
+# Synthetic Shortcut Config
+shortcut:
+  use_shortcut: false # Set to true to enable 60Hz noise injection
+  freq: 60
+  prob: 1.0 # Probability of applying to TARGET class (Normal/Abnormal) based on correlation
+  amplitude: 0.1 # mV
+  correlation: 0.9 # Strength of spurious correlation in TRAIN (0.9 means 90% of Abnormal have noise)
