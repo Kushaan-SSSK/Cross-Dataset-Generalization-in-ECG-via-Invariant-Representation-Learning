@@ -35,6 +35,12 @@ Run these recursively to generate data for the "Shortcut Sensitivity" plot. This
 # ERM on Poisoned Data
 python -m src.train method=erm data.shortcut.use_shortcut=true experiment_name=erm_shortcut hydra.run.dir=outputs/shortcuts/erm_60hz
 
+# DANN on Poisoned Data
+python -m src.train method=dann data.shortcut.use_shortcut=true experiment_name=dann_shortcut hydra.run.dir=outputs/shortcuts/dann_60hz
+
+# V-REx on Poisoned Data
+python -m src.train method=vrex data.shortcut.use_shortcut=true experiment_name=vrex_shortcut hydra.run.dir=outputs/shortcuts/vrex_60hz
+
 # Disentangled on Poisoned Data
 python -m src.train method=disentangled data.shortcut.use_shortcut=true experiment_name=disentangled_shortcut hydra.run.dir=outputs/shortcuts/v2_60hz
 ```
