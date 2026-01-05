@@ -45,7 +45,7 @@ class ECGDataset(Dataset):
         # Domain Mapping
         source = row['dataset_source']
         # 0: PTB-XL, 1: Chapman, 2: MIT-BIH (if used)
-        domain_map = {'ptbxl': 0, 'chapman': 1, 'mitbih': 2}
+        domain_map = {'ptbxl': 0, 'chapman': 1}
         domain = domain_map.get(source, 0) # Default to 0 if unknown
 
         # Retrieve signal

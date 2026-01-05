@@ -187,32 +187,7 @@ def process_chapman(config):
         
     return pd.DataFrame(clean_records)
 
-def process_mitbih(config):
-    """Process MIT-BIH."""
-    log.info("Processing MIT-BIH...")
-    root = config.paths.mitbih
-    records = []
-    
-    dat_files = glob.glob(os.path.join(root, "*.dat"))
-    for f in dat_files:
-        bname = os.path.basename(f).replace('.dat', '')
-        # Must have .atr
-        if not os.path.exists(os.path.join(root, bname + '.atr')):
-            continue
-            
-        records.append({
-            'unique_id': f"mitbih_{bname}",
-            'dataset_source': 'mitbih',
-            'original_path': bname, # Just basename for MIT-BIH usually
-            'sampling_rate': 360,
-            'patient_id': f"mitbih_{bname}", 
-            'age': 0, # Not easily available in filename, extract from header if needed, but not critical
-            'sex': 0,
-            'task_a_label': 6, # Windowing defines this
-            'raw_labels': "ATR"
-        })
-        
-    return pd.DataFrame(records)
+
 
 def main():
     parser = argparse.ArgumentParser()
@@ -228,9 +203,8 @@ def main():
     # Run
     df_ptb = process_ptbxl(main_cfg)
     df_chap = process_chapman(main_cfg)
-    df_mit = process_mitbih(main_cfg)
     
-    master = pd.concat([df_ptb, df_chap, df_mit], ignore_index=True)
+    master = pd.concat([df_ptb, df_chap], ignore_index=True)
     
     log.info(f"Total Records: {len(master)}")
     log.info(f"By Source:\n{master['dataset_source'].value_counts()}")

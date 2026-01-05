@@ -145,12 +145,12 @@ def main():
     # Dataset specific roots from config
     ptbxl_root = conf.paths.ptbxl
     chapman_root = conf.paths.chapman
-    mitbih_root = conf.paths.mitbih
+
     
     source_roots = {
         'ptbxl': ptbxl_root,
         'chapman': chapman_root,
-        'mitbih': mitbih_root
+
     }
 
     # Load Manifest
