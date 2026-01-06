@@ -34,3 +34,4 @@ results_poisoned_test/
 results_bundle/
 poisoned_results.csv
 FETCH_HEAD
+outputs/
