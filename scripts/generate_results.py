@@ -42,20 +42,44 @@ def forward_logits(model, x):
     raise RuntimeError(f"Cannot extract logits from model output type={type(out)}")
 
 def forward_features(model, x):
-    """Extract features from the backbone (before classifier)."""
-    # Assuming model has a 'backbone' attribute or similar. 
-    # Most methods in this repo wrap a backbone.
-    if hasattr(model, 'backbone'):
-        return model.backbone(x)
-    elif hasattr(model, 'featurizer'):
-        return model.featurizer(x)
+    """
+    Extract features from the backbone using a forward hook.
+    This works whether the method returns logits or features, 
+    and handles the different ways model.fc might be configured.
+    """
+    features = []
+    
+    def hook(module, input, output):
+        # output of avgpool is (B, C, 1) or (B, C) depending on implementation details
+        # ResNet1d avgpool is (B, C, 1).
+        if output.dim() == 3:
+            features.append(output.view(output.size(0), -1))
+        else:
+            features.append(output)
+
+    # Find the backbone
+    # Most methods store it in self.model
+    # If model is the backbone itself (passed directly?), handle that.
+    backbone = getattr(model, 'model', model)
+    
+    # Check for avgpool
+    if hasattr(backbone, 'avgpool'):
+        handle = backbone.avgpool.register_forward_hook(hook)
     else:
-        # Fallback: Hook or error. For now, try asking the model to return features
-        # Some implementations might return (logits, features)
-        out = model(x)
-        if isinstance(out, (tuple, list)) and len(out) > 1:
-            return out[1] # Often (logits, features)
-        raise RuntimeError("Could not extract features from model.")
+        # Fallback: Maybe it's not ResNet1d?
+        # If we can't find avgpool, try just calling the model (maybe it returns features?)
+        # But this is risky. Let's return logits as features if we fail? No.
+        # Let's try wrapping the whole model.
+        raise RuntimeError(f"Could not find avgpool in {type(backbone)}")
+        
+    try:
+        _ = model(x)
+    finally:
+        handle.remove()
+        
+    if len(features) > 0:
+        return features[0]
+    raise RuntimeError("Hook did not capture features.")
 
 def evaluate_model(model, loader, device, return_probs=False):
     model.eval()
