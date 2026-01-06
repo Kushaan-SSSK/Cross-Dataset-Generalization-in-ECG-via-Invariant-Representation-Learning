@@ -1,0 +1,614 @@
+[2026-01-03 17:27:06,061][__main__][INFO] - Training Config: 
+seed: 42
+debug: false
+data:
+  paths:
+    ptbxl: C:/Users/kusha/Downloads/Cross-Dataset Generalization in ECG via Invariant
+      Representation Learning/ptb-xl-a-large-publicly-available-electrocardiography-dataset-1.0.3
+    chapman: C:/Users/kusha/Downloads/Cross-Dataset Generalization in ECG via Invariant
+      Representation Learning/a-large-scale-12-lead-electrocardiogram-database-for-arrhythmia-study-1.0.0
+    mitbih: C:/Users/kusha/Downloads/Cross-Dataset Generalization in ECG via Invariant
+      Representation Learning/mit-bih-arrhythmia-database-1.0.0
+    manifest_path: C:/Users/kusha/Downloads/Cross-Dataset Generalization in ECG via
+      Invariant Representation Learning/data/manifests/master_manifest.csv
+    processed_path: C:/Users/kusha/Downloads/Cross-Dataset Generalization in ECG via
+      Invariant Representation Learning/data/processed/signals.h5
+    split_path: C:/Users/kusha/Downloads/Cross-Dataset Generalization in ECG via Invariant
+      Representation Learning/data/manifests/splits.json
+  splits:
+    train: 0.7
+    val: 0.1
+  seed: 42
+  sampling_rate: 100
+model:
+  _target_: src.models.resnet1d.ResNet1d
+  input_channels: 12
+  num_classes: 7
+  layers:
+  - 2
+  - 2
+  - 2
+  - 2
+  planes:
+  - 64
+  - 128
+  - 256
+  - 512
+method:
+  _target_: src.methods.erm.ERM
+train:
+  epochs: 50
+  batch_size: 64
+  lr: 0.001
+  weight_decay: 0.0001
+  optimizer: AdamW
+
+[2026-01-03 17:27:06,154][__main__][INFO] - Loading Manifest and Splits...
+[2026-01-03 17:27:06,155][__main__][INFO] - Loading Manifest and Splits...
+[2026-01-03 17:27:06,267][__main__][INFO] - Train Size: 46861, Val Size: 6675
+[2026-01-03 17:27:06,287][__main__][INFO] - Filtering for sources: ['ptbxl', 'chapman']
+[2026-01-03 17:27:06,295][__main__][INFO] - Filtered Train Size: 46828, Val Size: 6670
+[2026-01-03 17:27:06,653][__main__][INFO] - Instantiating Model...
+[2026-01-03 17:27:06,682][__main__][INFO] - Instantiating Method: src.methods.erm.ERM
+[2026-01-03 17:28:55,081][__main__][INFO] - Training Config: 
+seed: 42
+debug: false
+data:
+  paths:
+    ptbxl: C:/Users/kusha/Downloads/Cross-Dataset Generalization in ECG via Invariant
+      Representation Learning/ptb-xl-a-large-publicly-available-electrocardiography-dataset-1.0.3
+    chapman: C:/Users/kusha/Downloads/Cross-Dataset Generalization in ECG via Invariant
+      Representation Learning/a-large-scale-12-lead-electrocardiogram-database-for-arrhythmia-study-1.0.0
+    mitbih: C:/Users/kusha/Downloads/Cross-Dataset Generalization in ECG via Invariant
+      Representation Learning/mit-bih-arrhythmia-database-1.0.0
+    manifest_path: C:/Users/kusha/Downloads/Cross-Dataset Generalization in ECG via
+      Invariant Representation Learning/data/manifests/master_manifest.csv
+    processed_path: C:/Users/kusha/Downloads/Cross-Dataset Generalization in ECG via
+      Invariant Representation Learning/data/processed/signals.h5
+    split_path: C:/Users/kusha/Downloads/Cross-Dataset Generalization in ECG via Invariant
+      Representation Learning/data/manifests/splits.json
+  splits:
+    train: 0.7
+    val: 0.1
+  seed: 42
+  sampling_rate: 100
+model:
+  _target_: src.models.resnet1d.ResNet1d
+  input_channels: 12
+  num_classes: 7
+  layers:
+  - 2
+  - 2
+  - 2
+  - 2
+  planes:
+  - 64
+  - 128
+  - 256
+  - 512
+method:
+  _target_: src.methods.erm.ERM
+train:
+  epochs: 30
+  batch_size: 64
+  lr: 0.001
+  weight_decay: 0.0001
+  optimizer: AdamW
+
+[2026-01-03 17:28:55,083][__main__][INFO] - Loading Manifest and Splits...
+[2026-01-03 17:28:55,084][__main__][INFO] - Loading Manifest and Splits...
+[2026-01-03 17:28:55,194][__main__][INFO] - Train Size: 46861, Val Size: 6675
+[2026-01-03 17:28:55,213][__main__][INFO] - Filtering for sources: ['ptbxl', 'chapman']
+[2026-01-03 17:28:55,220][__main__][INFO] - Filtered Train Size: 46828, Val Size: 6670
+[2026-01-03 17:28:55,578][__main__][INFO] - Instantiating Model...
+[2026-01-03 17:28:55,606][__main__][INFO] - Instantiating Method: src.methods.erm.ERM
+[2026-01-05 09:23:21,655][__main__][INFO] - Training Config: 
+seed: 42
+debug: false
+data:
+  paths:
+    ptbxl: /workspace/data/ptbxl/ptb-xl-a-large-publicly-available-electrocardiography-dataset-1.0.3
+    chapman: /workspace/data/chapman/a-large-scale-12-lead-electrocardiogram-database-for-arrhythmia-study-1.0.0
+    manifest_path: /workspace/Cross-Dataset-Generalization-in-ECG-via-Invariant-Representation-Learning/data/processed/master_manifest.csv
+    split_path: /workspace/Cross-Dataset-Generalization-in-ECG-via-Invariant-Representation-Learning/data/processed/splits.json
+    processed_path: /workspace/Cross-Dataset-Generalization-in-ECG-via-Invariant-Representation-Learning/data/processed/signals.h5
+  sampling_rate: 250
+model:
+  _target_: src.models.resnet1d.ResNet1d
+  input_channels: 12
+  num_classes: 7
+  layers:
+  - 2
+  - 2
+  - 2
+  - 2
+  planes:
+  - 64
+  - 128
+  - 256
+  - 512
+method:
+  _target_: src.methods.erm.ERM
+train:
+  epochs: 50
+  batch_size: 64
+  lr: 0.001
+  weight_decay: 0.0001
+  optimizer: AdamW
+
+[2026-01-05 09:23:21,683][__main__][INFO] - Loading Manifest and Splits...
+[2026-01-05 09:23:21,683][__main__][INFO] - Loading Manifest and Splits...
+[2026-01-05 09:23:21,897][__main__][INFO] - Train Size: 46867, Val Size: 6695
+[2026-01-05 09:23:21,936][__main__][INFO] - Filtering for sources: ['ptbxl', 'chapman']
+[2026-01-05 09:23:21,942][__main__][INFO] - Filtered Train Size: 46867, Val Size: 6695
+[2026-01-05 09:31:02,795][__main__][INFO] - Training Config: 
+seed: 42
+debug: false
+data:
+  paths:
+    ptbxl: /workspace/data/ptbxl/ptb-xl-a-large-publicly-available-electrocardiography-dataset-1.0.3
+    chapman: /workspace/data/chapman/a-large-scale-12-lead-electrocardiogram-database-for-arrhythmia-study-1.0.0
+    manifest_path: /workspace/Cross-Dataset-Generalization-in-ECG-via-Invariant-Representation-Learning/data/processed/master_manifest.csv
+    processed_path: /workspace/Cross-Dataset-Generalization-in-ECG-via-Invariant-Representation-Learning/data/processed/signals.h5
+    split_path: /workspace/Cross-Dataset-Generalization-in-ECG-via-Invariant-Representation-Learning/data/processed/splits.json
+  splits:
+    train: 0.7
+    val: 0.1
+  seed: 42
+  sampling_rate: 250
+  shortcut:
+    use_shortcut: false
+    freq: 60
+    prob: 1.0
+    amplitude: 0.1
+    correlation: 0.9
+model:
+  _target_: src.models.resnet1d.ResNet1d
+  input_channels: 12
+  num_classes: 7
+  layers:
+  - 2
+  - 2
+  - 2
+  - 2
+  planes:
+  - 64
+  - 128
+  - 256
+  - 512
+method:
+  _target_: src.methods.erm.ERM
+train:
+  epochs: 50
+  batch_size: 64
+  lr: 0.001
+  weight_decay: 0.0001
+  optimizer: AdamW
+
+[2026-01-05 09:31:02,821][__main__][INFO] - Loading Manifest and Splits...
+[2026-01-05 09:31:02,821][__main__][INFO] - Loading Manifest and Splits...
+[2026-01-05 09:31:02,974][__main__][INFO] - Train Size: 46867, Val Size: 6695
+[2026-01-05 09:31:03,000][__main__][INFO] - Filtering for sources: ['ptbxl', 'chapman']
+[2026-01-05 09:31:03,013][__main__][INFO] - Filtered Train Size: 46867, Val Size: 6695
+[2026-01-05 09:31:03,245][__main__][INFO] - Instantiating Model...
+[2026-01-05 09:31:03,305][__main__][INFO] - Instantiating Method: src.methods.erm.ERM
+[2026-01-05 09:38:38,907][__main__][INFO] - Epoch 1: Train Loss: 0.6209, Train Acc: 0.7783 | Val Loss: 0.6460, Val Acc: 0.7761, Val F1: 0.6302
+[2026-01-05 09:38:39,164][__main__][INFO] - New Best Model Saved!
+[2026-01-05 09:43:31,755][__main__][INFO] - Training Config: 
+seed: 42
+debug: false
+data:
+  paths:
+    ptbxl: /workspace/data/ptbxl/ptb-xl-a-large-publicly-available-electrocardiography-dataset-1.0.3
+    chapman: /workspace/data/chapman/a-large-scale-12-lead-electrocardiogram-database-for-arrhythmia-study-1.0.0
+    manifest_path: /workspace/Cross-Dataset-Generalization-in-ECG-via-Invariant-Representation-Learning/data/processed/master_manifest.csv
+    processed_path: /workspace/Cross-Dataset-Generalization-in-ECG-via-Invariant-Representation-Learning/data/processed/signals.h5
+    split_path: /workspace/Cross-Dataset-Generalization-in-ECG-via-Invariant-Representation-Learning/data/processed/splits.json
+  splits:
+    train: 0.7
+    val: 0.1
+  seed: 42
+  sampling_rate: 250
+  shortcut:
+    use_shortcut: false
+    freq: 60
+    prob: 1.0
+    amplitude: 0.1
+    correlation: 0.9
+model:
+  _target_: src.models.resnet1d.ResNet1d
+  input_channels: 12
+  num_classes: 7
+  layers:
+  - 2
+  - 2
+  - 2
+  - 2
+  planes:
+  - 64
+  - 128
+  - 256
+  - 512
+method:
+  _target_: src.methods.erm.ERM
+train:
+  epochs: 50
+  batch_size: 64
+  lr: 0.001
+  weight_decay: 0.0001
+  optimizer: AdamW
+
+[2026-01-05 09:43:31,870][__main__][INFO] - Loading Manifest and Splits...
+[2026-01-05 09:43:31,871][__main__][INFO] - Loading Manifest and Splits...
+[2026-01-05 09:43:32,235][__main__][INFO] - Train Size: 46867, Val Size: 6695
+[2026-01-05 09:43:32,365][__main__][INFO] - Filtering for sources: ['ptbxl', 'chapman']
+[2026-01-05 09:43:32,371][__main__][INFO] - Filtered Train Size: 46867, Val Size: 6695
+[2026-01-05 09:43:45,078][__main__][INFO] - Training Config: 
+seed: 42
+debug: false
+data:
+  paths:
+    ptbxl: /workspace/data/ptbxl/ptb-xl-a-large-publicly-available-electrocardiography-dataset-1.0.3
+    chapman: /workspace/data/chapman/a-large-scale-12-lead-electrocardiogram-database-for-arrhythmia-study-1.0.0
+    manifest_path: /workspace/Cross-Dataset-Generalization-in-ECG-via-Invariant-Representation-Learning/data/processed/master_manifest.csv
+    processed_path: /workspace/Cross-Dataset-Generalization-in-ECG-via-Invariant-Representation-Learning/data/processed/signals.h5
+    split_path: /workspace/Cross-Dataset-Generalization-in-ECG-via-Invariant-Representation-Learning/data/processed/splits.json
+  splits:
+    train: 0.7
+    val: 0.1
+  seed: 42
+  sampling_rate: 250
+  shortcut:
+    use_shortcut: false
+    freq: 60
+    prob: 1.0
+    amplitude: 0.1
+    correlation: 0.9
+model:
+  _target_: src.models.resnet1d.ResNet1d
+  input_channels: 12
+  num_classes: 7
+  layers:
+  - 2
+  - 2
+  - 2
+  - 2
+  planes:
+  - 64
+  - 128
+  - 256
+  - 512
+method:
+  _target_: src.methods.erm.ERM
+train:
+  epochs: 50
+  batch_size: 64
+  lr: 0.001
+  weight_decay: 0.0001
+  optimizer: AdamW
+
+[2026-01-05 09:43:45,097][__main__][INFO] - Loading Manifest and Splits...
+[2026-01-05 09:43:45,097][__main__][INFO] - Loading Manifest and Splits...
+[2026-01-05 09:43:45,291][__main__][INFO] - Train Size: 46867, Val Size: 6695
+[2026-01-05 09:43:45,368][__main__][INFO] - Filtering for sources: ['ptbxl', 'chapman']
+[2026-01-05 09:43:45,373][__main__][INFO] - Filtered Train Size: 46867, Val Size: 6695
+[2026-01-05 09:43:45,667][__main__][INFO] - Instantiating Model...
+[2026-01-05 09:43:45,668][__main__][INFO] - Instantiating Model...
+[2026-01-05 09:43:45,734][__main__][INFO] - Instantiating Method: src.methods.erm.ERM
+[2026-01-05 09:43:45,735][__main__][INFO] - Instantiating Method: src.methods.erm.ERM
+[2026-01-05 09:43:56,815][__main__][INFO] - Training Config: 
+seed: 42
+debug: false
+data:
+  paths:
+    ptbxl: /workspace/data/ptbxl/ptb-xl-a-large-publicly-available-electrocardiography-dataset-1.0.3
+    chapman: /workspace/data/chapman/a-large-scale-12-lead-electrocardiogram-database-for-arrhythmia-study-1.0.0
+    manifest_path: /workspace/Cross-Dataset-Generalization-in-ECG-via-Invariant-Representation-Learning/data/processed/master_manifest.csv
+    processed_path: /workspace/Cross-Dataset-Generalization-in-ECG-via-Invariant-Representation-Learning/data/processed/signals.h5
+    split_path: /workspace/Cross-Dataset-Generalization-in-ECG-via-Invariant-Representation-Learning/data/processed/splits.json
+  splits:
+    train: 0.7
+    val: 0.1
+  seed: 42
+  sampling_rate: 250
+  shortcut:
+    use_shortcut: false
+    freq: 60
+    prob: 1.0
+    amplitude: 0.1
+    correlation: 0.9
+model:
+  _target_: src.models.resnet1d.ResNet1d
+  input_channels: 12
+  num_classes: 7
+  layers:
+  - 2
+  - 2
+  - 2
+  - 2
+  planes:
+  - 64
+  - 128
+  - 256
+  - 512
+method:
+  _target_: src.methods.erm.ERM
+train:
+  epochs: 50
+  batch_size: 64
+  lr: 0.001
+  weight_decay: 0.0001
+  optimizer: AdamW
+
+[2026-01-05 09:43:56,836][__main__][INFO] - Loading Manifest and Splits...
+[2026-01-05 09:43:56,836][__main__][INFO] - Loading Manifest and Splits...
+[2026-01-05 09:43:57,086][__main__][INFO] - Train Size: 46867, Val Size: 6695
+[2026-01-05 09:43:57,112][__main__][INFO] - Filtering for sources: ['ptbxl', 'chapman']
+[2026-01-05 09:43:57,118][__main__][INFO] - Filtered Train Size: 46867, Val Size: 6695
+[2026-01-05 09:43:57,376][__main__][INFO] - Instantiating Model...
+[2026-01-05 09:43:57,512][__main__][INFO] - Instantiating Method: src.methods.erm.ERM
+[2026-01-05 09:44:11,085][__main__][INFO] - Training Config: 
+seed: 42
+debug: false
+data:
+  paths:
+    ptbxl: /workspace/data/ptbxl/ptb-xl-a-large-publicly-available-electrocardiography-dataset-1.0.3
+    chapman: /workspace/data/chapman/a-large-scale-12-lead-electrocardiogram-database-for-arrhythmia-study-1.0.0
+    manifest_path: /workspace/Cross-Dataset-Generalization-in-ECG-via-Invariant-Representation-Learning/data/processed/master_manifest.csv
+    processed_path: /workspace/Cross-Dataset-Generalization-in-ECG-via-Invariant-Representation-Learning/data/processed/signals.h5
+    split_path: /workspace/Cross-Dataset-Generalization-in-ECG-via-Invariant-Representation-Learning/data/processed/splits.json
+  splits:
+    train: 0.7
+    val: 0.1
+  seed: 42
+  sampling_rate: 250
+  shortcut:
+    use_shortcut: false
+    freq: 60
+    prob: 1.0
+    amplitude: 0.1
+    correlation: 0.9
+model:
+  _target_: src.models.resnet1d.ResNet1d
+  input_channels: 12
+  num_classes: 7
+  layers:
+  - 2
+  - 2
+  - 2
+  - 2
+  planes:
+  - 64
+  - 128
+  - 256
+  - 512
+method:
+  _target_: src.methods.erm.ERM
+train:
+  epochs: 50
+  batch_size: 64
+  lr: 0.001
+  weight_decay: 0.0001
+  optimizer: AdamW
+
+[2026-01-05 09:44:11,117][__main__][INFO] - Loading Manifest and Splits...
+[2026-01-05 09:44:11,117][__main__][INFO] - Loading Manifest and Splits...
+[2026-01-05 09:44:11,295][__main__][INFO] - Train Size: 46867, Val Size: 6695
+[2026-01-05 09:44:11,358][__main__][INFO] - Filtering for sources: ['ptbxl', 'chapman']
+[2026-01-05 09:44:11,364][__main__][INFO] - Filtered Train Size: 46867, Val Size: 6695
+[2026-01-05 09:44:12,007][__main__][INFO] - Instantiating Model...
+[2026-01-05 09:44:12,068][__main__][INFO] - Instantiating Method: src.methods.erm.ERM
+[2026-01-05 09:44:20,260][__main__][INFO] - Epoch 2: Train Loss: 0.4144, Train Acc: 0.8506 | Val Loss: 0.4551, Val Acc: 0.8290, Val F1: 0.7132
+[2026-01-05 09:44:20,598][__main__][INFO] - New Best Model Saved!
+[2026-01-05 09:44:33,876][__main__][INFO] - Training Config: 
+seed: 42
+debug: false
+data:
+  paths:
+    ptbxl: /workspace/data/ptbxl/ptb-xl-a-large-publicly-available-electrocardiography-dataset-1.0.3
+    chapman: /workspace/data/chapman/a-large-scale-12-lead-electrocardiogram-database-for-arrhythmia-study-1.0.0
+    manifest_path: /workspace/Cross-Dataset-Generalization-in-ECG-via-Invariant-Representation-Learning/data/processed/master_manifest.csv
+    processed_path: /workspace/Cross-Dataset-Generalization-in-ECG-via-Invariant-Representation-Learning/data/processed/signals.h5
+    split_path: /workspace/Cross-Dataset-Generalization-in-ECG-via-Invariant-Representation-Learning/data/processed/splits.json
+  splits:
+    train: 0.7
+    val: 0.1
+  seed: 42
+  sampling_rate: 250
+  shortcut:
+    use_shortcut: false
+    freq: 60
+    prob: 1.0
+    amplitude: 0.1
+    correlation: 0.9
+model:
+  _target_: src.models.resnet1d.ResNet1d
+  input_channels: 12
+  num_classes: 7
+  layers:
+  - 2
+  - 2
+  - 2
+  - 2
+  planes:
+  - 64
+  - 128
+  - 256
+  - 512
+method:
+  _target_: src.methods.erm.ERM
+train:
+  epochs: 50
+  batch_size: 64
+  lr: 0.001
+  weight_decay: 0.0001
+  optimizer: AdamW
+
+[2026-01-05 09:44:33,965][__main__][INFO] - Loading Manifest and Splits...
+[2026-01-05 09:44:33,966][__main__][INFO] - Loading Manifest and Splits...
+[2026-01-05 09:44:34,488][__main__][INFO] - Train Size: 46867, Val Size: 6695
+[2026-01-05 09:44:34,517][__main__][INFO] - Filtering for sources: ['ptbxl', 'chapman']
+[2026-01-05 09:44:34,523][__main__][INFO] - Filtered Train Size: 46867, Val Size: 6695
+[2026-01-05 09:44:35,041][__main__][INFO] - Instantiating Model...
+[2026-01-05 09:44:35,262][__main__][INFO] - Instantiating Method: src.methods.erm.ERM
+[2026-01-05 09:44:55,390][__main__][INFO] - Training Config: 
+seed: 42
+debug: false
+data:
+  paths:
+    ptbxl: /workspace/data/ptbxl/ptb-xl-a-large-publicly-available-electrocardiography-dataset-1.0.3
+    chapman: /workspace/data/chapman/a-large-scale-12-lead-electrocardiogram-database-for-arrhythmia-study-1.0.0
+    manifest_path: /workspace/Cross-Dataset-Generalization-in-ECG-via-Invariant-Representation-Learning/data/processed/master_manifest.csv
+    processed_path: /workspace/Cross-Dataset-Generalization-in-ECG-via-Invariant-Representation-Learning/data/processed/signals.h5
+    split_path: /workspace/Cross-Dataset-Generalization-in-ECG-via-Invariant-Representation-Learning/data/processed/splits.json
+  splits:
+    train: 0.7
+    val: 0.1
+  seed: 42
+  sampling_rate: 250
+  shortcut:
+    use_shortcut: false
+    freq: 60
+    prob: 1.0
+    amplitude: 0.1
+    correlation: 0.9
+model:
+  _target_: src.models.resnet1d.ResNet1d
+  input_channels: 12
+  num_classes: 7
+  layers:
+  - 2
+  - 2
+  - 2
+  - 2
+  planes:
+  - 64
+  - 128
+  - 256
+  - 512
+method:
+  _target_: src.methods.erm.ERM
+train:
+  epochs: 50
+  batch_size: 64
+  lr: 0.001
+  weight_decay: 0.0001
+  optimizer: AdamW
+
+[2026-01-05 09:44:55,453][__main__][INFO] - Loading Manifest and Splits...
+[2026-01-05 09:44:55,454][__main__][INFO] - Loading Manifest and Splits...
+[2026-01-05 09:44:56,091][__main__][INFO] - Train Size: 46867, Val Size: 6695
+[2026-01-05 09:44:56,117][__main__][INFO] - Filtering for sources: ['ptbxl', 'chapman']
+[2026-01-05 09:44:56,124][__main__][INFO] - Filtered Train Size: 46867, Val Size: 6695
+[2026-01-05 09:44:56,801][__main__][INFO] - Instantiating Model...
+[2026-01-05 09:44:56,870][__main__][INFO] - Instantiating Method: src.methods.erm.ERM
+[2026-01-05 09:49:40,178][__main__][INFO] - Training Config: 
+seed: 42
+debug: false
+data:
+  paths:
+    ptbxl: /workspace/data/ptbxl/ptb-xl-a-large-publicly-available-electrocardiography-dataset-1.0.3
+    chapman: /workspace/data/chapman/a-large-scale-12-lead-electrocardiogram-database-for-arrhythmia-study-1.0.0
+    manifest_path: /workspace/Cross-Dataset-Generalization-in-ECG-via-Invariant-Representation-Learning/data/processed/master_manifest.csv
+    processed_path: /workspace/Cross-Dataset-Generalization-in-ECG-via-Invariant-Representation-Learning/data/processed/signals.h5
+    split_path: /workspace/Cross-Dataset-Generalization-in-ECG-via-Invariant-Representation-Learning/data/processed/splits.json
+  splits:
+    train: 0.7
+    val: 0.1
+  seed: 42
+  sampling_rate: 250
+  shortcut:
+    use_shortcut: false
+    freq: 60
+    prob: 1.0
+    amplitude: 0.1
+    correlation: 0.9
+model:
+  _target_: src.models.resnet1d.ResNet1d
+  input_channels: 12
+  num_classes: 7
+  layers:
+  - 2
+  - 2
+  - 2
+  - 2
+  planes:
+  - 64
+  - 128
+  - 256
+  - 512
+method:
+  _target_: src.methods.erm.ERM
+train:
+  epochs: 50
+  batch_size: 64
+  lr: 0.001
+  weight_decay: 0.0001
+  optimizer: AdamW
+
+[2026-01-05 09:49:40,217][__main__][INFO] - Loading Manifest and Splits...
+[2026-01-05 09:49:40,217][__main__][INFO] - Loading Manifest and Splits...
+[2026-01-05 09:49:40,403][__main__][INFO] - Train Size: 46867, Val Size: 6695
+[2026-01-05 09:49:40,450][__main__][INFO] - Filtering for sources: ['ptbxl', 'chapman']
+[2026-01-05 09:49:40,456][__main__][INFO] - Filtered Train Size: 46867, Val Size: 6695
+[2026-01-05 09:49:55,742][__main__][INFO] - Instantiating Model...
+[2026-01-05 09:49:55,872][__main__][INFO] - Instantiating Method: src.methods.erm.ERM
+[2026-01-05 09:56:20,167][__main__][INFO] - Epoch 1: Train Loss: 0.6209, Train Acc: 0.7783 | Val Loss: 0.6460, Val Acc: 0.7761, Val F1: 0.6302
+[2026-01-05 09:56:20,387][__main__][INFO] - New Best Model Saved!
+[2026-01-05 10:02:32,828][__main__][INFO] - Epoch 2: Train Loss: 0.4144, Train Acc: 0.8506 | Val Loss: 0.4551, Val Acc: 0.8290, Val F1: 0.7132
+[2026-01-05 10:02:32,990][__main__][INFO] - New Best Model Saved!
+[2026-01-05 10:05:10,630][__main__][INFO] - Epoch 3: Train Loss: 0.3673, Train Acc: 0.8694 | Val Loss: 0.3795, Val Acc: 0.8574, Val F1: 0.7140
+[2026-01-05 10:05:10,921][__main__][INFO] - New Best Model Saved!
+[2026-01-05 10:07:45,809][__main__][INFO] - Epoch 4: Train Loss: 0.3280, Train Acc: 0.8817 | Val Loss: 0.3009, Val Acc: 0.8854, Val F1: 0.7840
+[2026-01-05 10:07:46,038][__main__][INFO] - New Best Model Saved!
+[2026-01-05 10:10:20,117][__main__][INFO] - Epoch 5: Train Loss: 0.2971, Train Acc: 0.8923 | Val Loss: 0.3121, Val Acc: 0.8854, Val F1: 0.7677
+[2026-01-05 10:12:55,704][__main__][INFO] - Epoch 6: Train Loss: 0.2734, Train Acc: 0.9005 | Val Loss: 0.2750, Val Acc: 0.8998, Val F1: 0.8083
+[2026-01-05 10:12:55,975][__main__][INFO] - New Best Model Saved!
+[2026-01-05 10:15:35,731][__main__][INFO] - Epoch 7: Train Loss: 0.2635, Train Acc: 0.9049 | Val Loss: 0.2986, Val Acc: 0.8923, Val F1: 0.8080
+[2026-01-05 10:18:12,222][__main__][INFO] - Epoch 8: Train Loss: 0.2512, Train Acc: 0.9086 | Val Loss: 0.2748, Val Acc: 0.9032, Val F1: 0.8145
+[2026-01-05 10:18:12,375][__main__][INFO] - New Best Model Saved!
+[2026-01-05 10:20:48,426][__main__][INFO] - Epoch 9: Train Loss: 0.2416, Train Acc: 0.9111 | Val Loss: 0.2612, Val Acc: 0.9028, Val F1: 0.7955
+[2026-01-05 10:23:27,717][__main__][INFO] - Epoch 10: Train Loss: 0.2288, Train Acc: 0.9140 | Val Loss: 0.2540, Val Acc: 0.9090, Val F1: 0.8396
+[2026-01-05 10:23:27,950][__main__][INFO] - New Best Model Saved!
+[2026-01-05 10:26:06,915][__main__][INFO] - Epoch 11: Train Loss: 0.2163, Train Acc: 0.9200 | Val Loss: 0.2394, Val Acc: 0.9123, Val F1: 0.8326
+[2026-01-05 10:28:46,124][__main__][INFO] - Epoch 12: Train Loss: 0.2032, Train Acc: 0.9247 | Val Loss: 0.2417, Val Acc: 0.9125, Val F1: 0.8516
+[2026-01-05 10:28:46,282][__main__][INFO] - New Best Model Saved!
+[2026-01-05 10:31:26,625][__main__][INFO] - Epoch 13: Train Loss: 0.1944, Train Acc: 0.9270 | Val Loss: 0.2368, Val Acc: 0.9135, Val F1: 0.8560
+[2026-01-05 10:31:26,788][__main__][INFO] - New Best Model Saved!
+[2026-01-05 10:33:59,913][__main__][INFO] - Epoch 14: Train Loss: 0.1869, Train Acc: 0.9292 | Val Loss: 0.2570, Val Acc: 0.9093, Val F1: 0.8223
+[2026-01-05 10:36:32,616][__main__][INFO] - Epoch 15: Train Loss: 0.1701, Train Acc: 0.9357 | Val Loss: 0.2565, Val Acc: 0.9066, Val F1: 0.8355
+[2026-01-05 10:39:04,713][__main__][INFO] - Epoch 16: Train Loss: 0.1594, Train Acc: 0.9384 | Val Loss: 0.2519, Val Acc: 0.9117, Val F1: 0.8316
+[2026-01-05 10:41:35,515][__main__][INFO] - Epoch 17: Train Loss: 0.1454, Train Acc: 0.9443 | Val Loss: 0.2837, Val Acc: 0.9065, Val F1: 0.8480
+[2026-01-05 10:44:08,623][__main__][INFO] - Epoch 18: Train Loss: 0.1345, Train Acc: 0.9471 | Val Loss: 0.2807, Val Acc: 0.9068, Val F1: 0.8308
+[2026-01-05 10:46:48,921][__main__][INFO] - Epoch 19: Train Loss: 0.1219, Train Acc: 0.9519 | Val Loss: 0.2969, Val Acc: 0.9028, Val F1: 0.8129
+[2026-01-05 10:49:19,563][__main__][INFO] - Epoch 20: Train Loss: 0.1097, Train Acc: 0.9576 | Val Loss: 0.3034, Val Acc: 0.9025, Val F1: 0.8312
+[2026-01-05 10:51:23,563][__main__][INFO] - Epoch 21: Train Loss: 0.0955, Train Acc: 0.9629 | Val Loss: 0.3397, Val Acc: 0.9005, Val F1: 0.8190
+[2026-01-05 10:53:21,924][__main__][INFO] - Epoch 22: Train Loss: 0.0836, Train Acc: 0.9671 | Val Loss: 0.3526, Val Acc: 0.9080, Val F1: 0.8412
+[2026-01-05 10:55:31,908][__main__][INFO] - Epoch 23: Train Loss: 0.0759, Train Acc: 0.9715 | Val Loss: 0.3754, Val Acc: 0.9020, Val F1: 0.8093
+[2026-01-05 10:58:08,315][__main__][INFO] - Epoch 24: Train Loss: 0.0650, Train Acc: 0.9754 | Val Loss: 0.3605, Val Acc: 0.9074, Val F1: 0.8350
+[2026-01-05 11:00:50,231][__main__][INFO] - Epoch 25: Train Loss: 0.0567, Train Acc: 0.9783 | Val Loss: 0.4046, Val Acc: 0.9055, Val F1: 0.8280
+[2026-01-05 11:03:32,056][__main__][INFO] - Epoch 26: Train Loss: 0.0495, Train Acc: 0.9818 | Val Loss: 0.4199, Val Acc: 0.8962, Val F1: 0.8257
+[2026-01-05 11:06:12,718][__main__][INFO] - Epoch 27: Train Loss: 0.0464, Train Acc: 0.9826 | Val Loss: 0.4296, Val Acc: 0.9014, Val F1: 0.8178
+[2026-01-05 11:08:53,713][__main__][INFO] - Epoch 28: Train Loss: 0.0390, Train Acc: 0.9863 | Val Loss: 0.4255, Val Acc: 0.9066, Val F1: 0.8396
+[2026-01-05 11:11:34,956][__main__][INFO] - Epoch 29: Train Loss: 0.0355, Train Acc: 0.9869 | Val Loss: 0.4510, Val Acc: 0.9062, Val F1: 0.8111
+[2026-01-05 11:14:17,426][__main__][INFO] - Epoch 30: Train Loss: 0.0264, Train Acc: 0.9910 | Val Loss: 0.5318, Val Acc: 0.9007, Val F1: 0.8090
+[2026-01-05 11:16:59,914][__main__][INFO] - Epoch 31: Train Loss: 0.0325, Train Acc: 0.9889 | Val Loss: 0.5142, Val Acc: 0.8995, Val F1: 0.8261
+[2026-01-05 11:19:42,718][__main__][INFO] - Epoch 32: Train Loss: 0.0267, Train Acc: 0.9903 | Val Loss: 0.5019, Val Acc: 0.9032, Val F1: 0.8374
+[2026-01-05 11:22:29,811][__main__][INFO] - Epoch 33: Train Loss: 0.0271, Train Acc: 0.9902 | Val Loss: 0.5452, Val Acc: 0.9029, Val F1: 0.8389
+[2026-01-05 11:25:10,731][__main__][INFO] - Epoch 34: Train Loss: 0.0269, Train Acc: 0.9901 | Val Loss: 0.5015, Val Acc: 0.9066, Val F1: 0.8389
+[2026-01-05 11:27:53,309][__main__][INFO] - Epoch 35: Train Loss: 0.0277, Train Acc: 0.9905 | Val Loss: 0.5296, Val Acc: 0.9053, Val F1: 0.8212
+[2026-01-05 11:30:36,122][__main__][INFO] - Epoch 36: Train Loss: 0.0196, Train Acc: 0.9928 | Val Loss: 0.5775, Val Acc: 0.9066, Val F1: 0.8334
+[2026-01-05 11:33:19,258][__main__][INFO] - Epoch 37: Train Loss: 0.0221, Train Acc: 0.9922 | Val Loss: 0.5222, Val Acc: 0.9083, Val F1: 0.8213
+[2026-01-05 11:36:03,321][__main__][INFO] - Epoch 38: Train Loss: 0.0152, Train Acc: 0.9947 | Val Loss: 0.5282, Val Acc: 0.9084, Val F1: 0.8293
+[2026-01-05 11:38:47,608][__main__][INFO] - Epoch 39: Train Loss: 0.0203, Train Acc: 0.9928 | Val Loss: 0.5021, Val Acc: 0.9041, Val F1: 0.8394
+[2026-01-05 11:41:28,216][__main__][INFO] - Epoch 40: Train Loss: 0.0225, Train Acc: 0.9922 | Val Loss: 0.5641, Val Acc: 0.9055, Val F1: 0.8461
+[2026-01-05 11:44:09,559][__main__][INFO] - Epoch 41: Train Loss: 0.0173, Train Acc: 0.9942 | Val Loss: 0.5822, Val Acc: 0.9074, Val F1: 0.8377
+[2026-01-05 11:46:50,617][__main__][INFO] - Epoch 42: Train Loss: 0.0199, Train Acc: 0.9931 | Val Loss: 0.5615, Val Acc: 0.9019, Val F1: 0.8360
+[2026-01-05 11:49:36,315][__main__][INFO] - Epoch 43: Train Loss: 0.0151, Train Acc: 0.9946 | Val Loss: 0.5961, Val Acc: 0.9053, Val F1: 0.8469
+[2026-01-05 11:52:23,299][__main__][INFO] - Epoch 44: Train Loss: 0.0154, Train Acc: 0.9953 | Val Loss: 0.5616, Val Acc: 0.9043, Val F1: 0.8095
+[2026-01-05 11:55:05,123][__main__][INFO] - Epoch 45: Train Loss: 0.0208, Train Acc: 0.9934 | Val Loss: 0.5714, Val Acc: 0.8968, Val F1: 0.8227
+[2026-01-05 11:57:47,157][__main__][INFO] - Epoch 46: Train Loss: 0.0184, Train Acc: 0.9939 | Val Loss: 0.5789, Val Acc: 0.9020, Val F1: 0.8297
+[2026-01-05 12:00:27,936][__main__][INFO] - Epoch 47: Train Loss: 0.0125, Train Acc: 0.9958 | Val Loss: 0.6277, Val Acc: 0.9008, Val F1: 0.8109
+[2026-01-05 12:03:11,323][__main__][INFO] - Epoch 48: Train Loss: 0.0127, Train Acc: 0.9955 | Val Loss: 0.5890, Val Acc: 0.9049, Val F1: 0.8356
+[2026-01-05 12:05:54,823][__main__][INFO] - Epoch 49: Train Loss: 0.0168, Train Acc: 0.9946 | Val Loss: 0.6055, Val Acc: 0.9044, Val F1: 0.8465
+[2026-01-05 12:08:35,460][__main__][INFO] - Epoch 50: Train Loss: 0.0150, Train Acc: 0.9949 | Val Loss: 0.5579, Val Acc: 0.9029, Val F1: 0.8341

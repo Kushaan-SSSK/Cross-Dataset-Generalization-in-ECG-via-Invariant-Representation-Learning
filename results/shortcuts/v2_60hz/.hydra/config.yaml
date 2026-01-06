@@ -1,0 +1,45 @@
+seed: 42
+debug: false
+data:
+  paths:
+    ptbxl: /workspace/data/ptbxl/ptb-xl-a-large-publicly-available-electrocardiography-dataset-1.0.3
+    chapman: /workspace/data/chapman/a-large-scale-12-lead-electrocardiogram-database-for-arrhythmia-study-1.0.0
+    manifest_path: /workspace/Cross-Dataset-Generalization-in-ECG-via-Invariant-Representation-Learning/data/processed/master_manifest.csv
+    processed_path: /workspace/Cross-Dataset-Generalization-in-ECG-via-Invariant-Representation-Learning/data/processed/signals.h5
+    split_path: /workspace/Cross-Dataset-Generalization-in-ECG-via-Invariant-Representation-Learning/data/processed/splits.json
+  splits:
+    train: 0.7
+    val: 0.1
+  seed: 42
+  sampling_rate: 250
+  shortcut:
+    use_shortcut: true
+    freq: 60
+    prob: 1.0
+    amplitude: 0.1
+    correlation: 0.9
+model:
+  _target_: src.models.resnet1d.ResNet1d
+  input_channels: 12
+  num_classes: 7
+  layers:
+  - 2
+  - 2
+  - 2
+  - 2
+  planes:
+  - 64
+  - 128
+  - 256
+  - 512
+method:
+  _target_: src.methods.disentangled.Disentangled
+  num_domains: 2
+  lambda_adv: 1.0
+  lambda_bias: 1.0
+train:
+  epochs: 50
+  batch_size: 64
+  lr: 0.001
+  weight_decay: 0.0001
+  optimizer: AdamW

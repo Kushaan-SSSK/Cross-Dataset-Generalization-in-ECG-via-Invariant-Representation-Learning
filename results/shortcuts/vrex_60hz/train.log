@@ -1,0 +1,118 @@
+[2026-01-06 03:25:20,915][__main__][INFO] - Training Config: 
+seed: 42
+debug: false
+data:
+  paths:
+    ptbxl: /workspace/data/ptbxl/ptb-xl-a-large-publicly-available-electrocardiography-dataset-1.0.3
+    chapman: /workspace/data/chapman/a-large-scale-12-lead-electrocardiogram-database-for-arrhythmia-study-1.0.0
+    manifest_path: /workspace/Cross-Dataset-Generalization-in-ECG-via-Invariant-Representation-Learning/data/processed/master_manifest.csv
+    processed_path: /workspace/Cross-Dataset-Generalization-in-ECG-via-Invariant-Representation-Learning/data/processed/signals.h5
+    split_path: /workspace/Cross-Dataset-Generalization-in-ECG-via-Invariant-Representation-Learning/data/processed/splits.json
+  splits:
+    train: 0.7
+    val: 0.1
+  seed: 42
+  sampling_rate: 250
+  shortcut:
+    use_shortcut: true
+    freq: 60
+    prob: 1.0
+    amplitude: 0.1
+    correlation: 0.9
+model:
+  _target_: src.models.resnet1d.ResNet1d
+  input_channels: 12
+  num_classes: 7
+  layers:
+  - 2
+  - 2
+  - 2
+  - 2
+  planes:
+  - 64
+  - 128
+  - 256
+  - 512
+method:
+  _target_: src.methods.vrex.VREx
+  beta: 10.0
+  annealing_epochs: 10
+train:
+  epochs: 50
+  batch_size: 64
+  lr: 0.001
+  weight_decay: 0.0001
+  optimizer: AdamW
+
+[2026-01-06 03:25:21,000][__main__][INFO] - Loading Manifest and Splits...
+[2026-01-06 03:25:21,008][__main__][INFO] - Loading Manifest and Splits...
+[2026-01-06 03:25:21,315][__main__][INFO] - Train Size: 46867, Val Size: 6695
+[2026-01-06 03:25:21,375][__main__][INFO] - Filtering for sources: ['ptbxl', 'chapman']
+[2026-01-06 03:25:21,388][__main__][INFO] - Filtered Train Size: 46867, Val Size: 6695
+[2026-01-06 03:25:55,159][__main__][INFO] - Instantiating Model...
+[2026-01-06 03:25:55,394][__main__][INFO] - Instantiating Method: src.methods.vrex.VREx
+[2026-01-06 03:35:32,102][__main__][INFO] - Epoch 1: Train Loss: 1.4860, Train Acc: 0.5576 | Val Loss: 1.0407, Val Acc: 0.6046, Val F1: 0.4470
+[2026-01-06 03:35:32,432][__main__][INFO] - New Best Model Saved!
+[2026-01-06 03:41:59,618][__main__][INFO] - Epoch 2: Train Loss: 0.9994, Train Acc: 0.7098 | Val Loss: 0.7837, Val Acc: 0.7028, Val F1: 0.5678
+[2026-01-06 03:41:59,895][__main__][INFO] - New Best Model Saved!
+[2026-01-06 03:44:41,713][__main__][INFO] - Epoch 3: Train Loss: 0.8583, Train Acc: 0.7578 | Val Loss: 0.5974, Val Acc: 0.8006, Val F1: 0.6109
+[2026-01-06 03:44:41,993][__main__][INFO] - New Best Model Saved!
+[2026-01-06 03:47:22,977][__main__][INFO] - Epoch 4: Train Loss: 0.7439, Train Acc: 0.7875 | Val Loss: 0.5842, Val Acc: 0.8076, Val F1: 0.6049
+[2026-01-06 03:50:03,558][__main__][INFO] - Epoch 5: Train Loss: 0.6904, Train Acc: 0.8026 | Val Loss: 0.5515, Val Acc: 0.7955, Val F1: 0.6433
+[2026-01-06 03:50:03,737][__main__][INFO] - New Best Model Saved!
+[2026-01-06 03:52:44,314][__main__][INFO] - Epoch 6: Train Loss: 0.6734, Train Acc: 0.8146 | Val Loss: 0.4816, Val Acc: 0.8363, Val F1: 0.6567
+[2026-01-06 03:52:44,477][__main__][INFO] - New Best Model Saved!
+[2026-01-06 03:55:25,422][__main__][INFO] - Epoch 7: Train Loss: 0.6089, Train Acc: 0.8296 | Val Loss: 0.5302, Val Acc: 0.8082, Val F1: 0.6473
+[2026-01-06 03:58:06,315][__main__][INFO] - Epoch 8: Train Loss: 0.6258, Train Acc: 0.8284 | Val Loss: 0.8576, Val Acc: 0.6296, Val F1: 0.5350
+[2026-01-06 04:00:47,722][__main__][INFO] - Epoch 9: Train Loss: 0.5826, Train Acc: 0.8383 | Val Loss: 0.4686, Val Acc: 0.8285, Val F1: 0.6237
+[2026-01-06 04:03:29,157][__main__][INFO] - Epoch 10: Train Loss: 0.5418, Train Acc: 0.8492 | Val Loss: 0.4857, Val Acc: 0.8323, Val F1: 0.7049
+[2026-01-06 04:03:29,448][__main__][INFO] - New Best Model Saved!
+[2026-01-06 04:06:10,017][__main__][INFO] - Epoch 11: Train Loss: 0.5369, Train Acc: 0.8556 | Val Loss: 0.4555, Val Acc: 0.8361, Val F1: 0.6525
+[2026-01-06 04:08:51,063][__main__][INFO] - Epoch 12: Train Loss: 0.5374, Train Acc: 0.8518 | Val Loss: 0.4180, Val Acc: 0.8596, Val F1: 0.6633
+[2026-01-06 04:11:33,222][__main__][INFO] - Epoch 13: Train Loss: 0.4828, Train Acc: 0.8645 | Val Loss: 0.4186, Val Acc: 0.8471, Val F1: 0.7045
+[2026-01-06 04:14:14,317][__main__][INFO] - Epoch 14: Train Loss: 0.4762, Train Acc: 0.8671 | Val Loss: 0.3835, Val Acc: 0.8675, Val F1: 0.6882
+[2026-01-06 04:16:54,215][__main__][INFO] - Epoch 15: Train Loss: 0.4485, Train Acc: 0.8772 | Val Loss: 0.3807, Val Acc: 0.8550, Val F1: 0.7011
+[2026-01-06 04:19:33,757][__main__][INFO] - Epoch 16: Train Loss: 0.3896, Train Acc: 0.9037 | Val Loss: 0.4137, Val Acc: 0.8433, Val F1: 0.6812
+[2026-01-06 04:22:14,261][__main__][INFO] - Epoch 17: Train Loss: 0.3377, Train Acc: 0.9142 | Val Loss: 0.4383, Val Acc: 0.8305, Val F1: 0.6888
+[2026-01-06 04:24:55,712][__main__][INFO] - Epoch 18: Train Loss: 0.3263, Train Acc: 0.9149 | Val Loss: 0.4358, Val Acc: 0.8326, Val F1: 0.6809
+[2026-01-06 04:27:36,715][__main__][INFO] - Epoch 19: Train Loss: 0.3393, Train Acc: 0.9151 | Val Loss: 0.4700, Val Acc: 0.8188, Val F1: 0.6466
+[2026-01-06 04:30:17,513][__main__][INFO] - Epoch 20: Train Loss: 0.3006, Train Acc: 0.9220 | Val Loss: 0.4073, Val Acc: 0.8361, Val F1: 0.6813
+[2026-01-06 04:32:58,857][__main__][INFO] - Epoch 21: Train Loss: 0.2822, Train Acc: 0.9262 | Val Loss: 0.3206, Val Acc: 0.8848, Val F1: 0.7540
+[2026-01-06 04:32:59,051][__main__][INFO] - New Best Model Saved!
+[2026-01-06 04:35:40,058][__main__][INFO] - Epoch 22: Train Loss: 0.2852, Train Acc: 0.9244 | Val Loss: 0.3818, Val Acc: 0.8586, Val F1: 0.7542
+[2026-01-06 04:35:40,345][__main__][INFO] - New Best Model Saved!
+[2026-01-06 04:38:21,123][__main__][INFO] - Epoch 23: Train Loss: 0.2810, Train Acc: 0.9285 | Val Loss: 0.3748, Val Acc: 0.8599, Val F1: 0.6946
+[2026-01-06 04:41:03,321][__main__][INFO] - Epoch 24: Train Loss: 0.2689, Train Acc: 0.9297 | Val Loss: 0.4134, Val Acc: 0.8445, Val F1: 0.7193
+[2026-01-06 04:43:44,655][__main__][INFO] - Epoch 25: Train Loss: 0.2657, Train Acc: 0.9295 | Val Loss: 0.3923, Val Acc: 0.8502, Val F1: 0.6969
+[2026-01-06 04:46:25,722][__main__][INFO] - Epoch 26: Train Loss: 0.2621, Train Acc: 0.9323 | Val Loss: 0.3375, Val Acc: 0.8675, Val F1: 0.7353
+[2026-01-06 04:49:07,115][__main__][INFO] - Epoch 27: Train Loss: 0.2607, Train Acc: 0.9334 | Val Loss: 0.3324, Val Acc: 0.8757, Val F1: 0.7557
+[2026-01-06 04:49:07,327][__main__][INFO] - New Best Model Saved!
+[2026-01-06 04:51:48,323][__main__][INFO] - Epoch 28: Train Loss: 0.2377, Train Acc: 0.9361 | Val Loss: 0.4259, Val Acc: 0.8415, Val F1: 0.7330
+[2026-01-06 04:54:29,659][__main__][INFO] - Epoch 29: Train Loss: 0.2358, Train Acc: 0.9382 | Val Loss: 0.3768, Val Acc: 0.8569, Val F1: 0.7263
+[2026-01-06 04:57:10,658][__main__][INFO] - Epoch 30: Train Loss: 0.2346, Train Acc: 0.9394 | Val Loss: 0.3900, Val Acc: 0.8541, Val F1: 0.7184
+[2026-01-06 04:59:51,317][__main__][INFO] - Epoch 31: Train Loss: 0.2306, Train Acc: 0.9406 | Val Loss: 0.3750, Val Acc: 0.8517, Val F1: 0.7559
+[2026-01-06 04:59:51,485][__main__][INFO] - New Best Model Saved!
+[2026-01-06 05:02:32,519][__main__][INFO] - Epoch 32: Train Loss: 0.2106, Train Acc: 0.9445 | Val Loss: 0.3509, Val Acc: 0.8687, Val F1: 0.7720
+[2026-01-06 05:02:32,867][__main__][INFO] - New Best Model Saved!
+[2026-01-06 05:05:14,658][__main__][INFO] - Epoch 33: Train Loss: 0.2130, Train Acc: 0.9448 | Val Loss: 0.3816, Val Acc: 0.8535, Val F1: 0.7809
+[2026-01-06 05:05:14,932][__main__][INFO] - New Best Model Saved!
+[2026-01-06 05:07:56,417][__main__][INFO] - Epoch 34: Train Loss: 0.2093, Train Acc: 0.9449 | Val Loss: 0.3406, Val Acc: 0.8754, Val F1: 0.7413
+[2026-01-06 05:10:38,015][__main__][INFO] - Epoch 35: Train Loss: 0.1999, Train Acc: 0.9470 | Val Loss: 0.3580, Val Acc: 0.8741, Val F1: 0.7952
+[2026-01-06 05:10:38,384][__main__][INFO] - New Best Model Saved!
+[2026-01-06 05:13:22,801][__main__][INFO] - Epoch 36: Train Loss: 0.1970, Train Acc: 0.9488 | Val Loss: 0.3344, Val Acc: 0.8739, Val F1: 0.7821
+[2026-01-06 05:16:03,622][__main__][INFO] - Epoch 37: Train Loss: 0.1854, Train Acc: 0.9521 | Val Loss: 0.4579, Val Acc: 0.8276, Val F1: 0.7138
+[2026-01-06 05:18:44,361][__main__][INFO] - Epoch 38: Train Loss: 0.1786, Train Acc: 0.9532 | Val Loss: 0.3602, Val Acc: 0.8733, Val F1: 0.7739
+[2026-01-06 05:21:27,947][__main__][INFO] - Epoch 39: Train Loss: 0.1645, Train Acc: 0.9537 | Val Loss: 0.3585, Val Acc: 0.8760, Val F1: 0.7803
+[2026-01-06 05:24:10,759][__main__][INFO] - Epoch 40: Train Loss: 0.1654, Train Acc: 0.9559 | Val Loss: 0.3346, Val Acc: 0.8771, Val F1: 0.7834
+[2026-01-06 05:26:52,723][__main__][INFO] - Epoch 41: Train Loss: 0.1575, Train Acc: 0.9576 | Val Loss: 0.3920, Val Acc: 0.8623, Val F1: 0.7674
+[2026-01-06 05:29:34,158][__main__][INFO] - Epoch 42: Train Loss: 0.1519, Train Acc: 0.9613 | Val Loss: 0.3789, Val Acc: 0.8648, Val F1: 0.7748
+[2026-01-06 05:32:15,721][__main__][INFO] - Epoch 43: Train Loss: 0.1399, Train Acc: 0.9632 | Val Loss: 0.4433, Val Acc: 0.8656, Val F1: 0.7708
+[2026-01-06 05:34:56,906][__main__][INFO] - Epoch 44: Train Loss: 0.1192, Train Acc: 0.9691 | Val Loss: 0.3517, Val Acc: 0.8844, Val F1: 0.7856
+[2026-01-06 05:37:39,913][__main__][INFO] - Epoch 45: Train Loss: 0.1518, Train Acc: 0.9636 | Val Loss: 0.3367, Val Acc: 0.8769, Val F1: 0.7856
+[2026-01-06 05:40:21,021][__main__][INFO] - Epoch 46: Train Loss: 0.1020, Train Acc: 0.9726 | Val Loss: 0.4413, Val Acc: 0.8771, Val F1: 0.8015
+[2026-01-06 05:40:21,235][__main__][INFO] - New Best Model Saved!
+[2026-01-06 05:43:03,763][__main__][INFO] - Epoch 47: Train Loss: 0.0938, Train Acc: 0.9762 | Val Loss: 0.4909, Val Acc: 0.8736, Val F1: 0.8025
+[2026-01-06 05:43:04,074][__main__][INFO] - New Best Model Saved!
+[2026-01-06 05:45:45,412][__main__][INFO] - Epoch 48: Train Loss: 0.1075, Train Acc: 0.9719 | Val Loss: 0.5633, Val Acc: 0.8527, Val F1: 0.7683
+[2026-01-06 05:48:26,920][__main__][INFO] - Epoch 49: Train Loss: 0.0842, Train Acc: 0.9791 | Val Loss: 0.4696, Val Acc: 0.8733, Val F1: 0.7845
+[2026-01-06 05:51:09,057][__main__][INFO] - Epoch 50: Train Loss: 0.1111, Train Acc: 0.9753 | Val Loss: 0.3941, Val Acc: 0.8775, Val F1: 0.7898
