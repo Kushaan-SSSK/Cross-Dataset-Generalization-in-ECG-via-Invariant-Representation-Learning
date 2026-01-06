@@ -1,31 +1,35 @@
+
 import hydra
 from omegaconf import DictConfig
 import logging
+import sys
+import os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+import logging
 import torch
+import torch.nn.functional as F
 import pandas as pd
 import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, TensorDataset
 from tqdm import tqdm
 import json
 import os
 import importlib
 import inspect
-from sklearn.metrics import confusion_matrix, accuracy_score, f1_score
+from sklearn.metrics import confusion_matrix, accuracy_score, f1_score, roc_auc_score, precision_recall_curve, auc, log_loss
+from sklearn.linear_model import LogisticRegression
+from scipy.fft import fft
 
 from src.dataset import ECGDataset
 
 log = logging.getLogger(__name__)
 
+# --- Helper Functions ---
+
 def forward_logits(model, x):
-    """
-    Normalize forward outputs to logits tensor.
-    Supports:
-      - logits
-      - (logits, extra...)
-      - dict with logits-like key
-    """
+    """Normalize forward outputs to logits tensor."""
     out = model(x)
     if isinstance(out, torch.Tensor):
         return out
@@ -37,19 +41,49 @@ def forward_logits(model, x):
                 return out[k]
     raise RuntimeError(f"Cannot extract logits from model output type={type(out)}")
 
-def evaluate_model(model, loader, device):
+def forward_features(model, x):
+    """Extract features from the backbone (before classifier)."""
+    # Assuming model has a 'backbone' attribute or similar. 
+    # Most methods in this repo wrap a backbone.
+    if hasattr(model, 'backbone'):
+        return model.backbone(x)
+    elif hasattr(model, 'featurizer'):
+        return model.featurizer(x)
+    else:
+        # Fallback: Hook or error. For now, try asking the model to return features
+        # Some implementations might return (logits, features)
+        out = model(x)
+        if isinstance(out, (tuple, list)) and len(out) > 1:
+            return out[1] # Often (logits, features)
+        raise RuntimeError("Could not extract features from model.")
+
+def evaluate_model(model, loader, device, return_probs=False):
     model.eval()
-    all_preds, all_targets, all_domains = [], [], []
+    all_preds, all_targets, all_domains, all_probs = [], [], [], []
+    
     with torch.no_grad():
-        for batch in tqdm(loader, desc="Evaluating"):
+        for batch in tqdm(loader, desc="Evaluating", leave=False):
             batch = [b.to(device) for b in batch]
             x, y, d = batch[:3]
             logits = forward_logits(model, x)
             preds = torch.argmax(logits, dim=1)
+            
             all_preds.append(preds.cpu().numpy())
             all_targets.append(y.cpu().numpy())
             all_domains.append(d.cpu().numpy())
-    return np.concatenate(all_preds), np.concatenate(all_targets), np.concatenate(all_domains)
+            
+            if return_probs:
+                probs = torch.softmax(logits, dim=1)
+                all_probs.append(probs.cpu().numpy())
+
+    preds = np.concatenate(all_preds)
+    targets = np.concatenate(all_targets)
+    domains = np.concatenate(all_domains)
+    
+    if return_probs:
+        probs = np.concatenate(all_probs)
+        return preds, targets, domains, probs
+    return preds, targets, domains
 
 def _get_ids_from_splits(splits: dict, split_name: str):
     ids = splits.get(split_name, [])
@@ -62,30 +96,20 @@ def _get_ids_from_splits(splits: dict, split_name: str):
     return out
 
 def _pick_method_class(module, run_name: str):
-    """
-    Pick the most likely wrapper class from a module by inspecting classes defined there.
-    """
+    """Pick the most likely wrapper class from a module."""
     run = run_name.lower()
-
     candidates = []
     for name, obj in vars(module).items():
-        if not inspect.isclass(obj):
-            continue
-        # Keep classes defined in this module
-        if obj.__module__ != module.__name__:
-            continue
-        # Must be a torch nn.Module (your methods should be)
+        if not inspect.isclass(obj): continue
+        if obj.__module__ != module.__name__: continue
         try:
-            if not issubclass(obj, torch.nn.Module):
-                continue
-        except Exception:
-            continue
+            if not issubclass(obj, torch.nn.Module): continue
+        except Exception: continue
         candidates.append(obj)
 
     if not candidates:
         raise RuntimeError(f"No torch.nn.Module classes found in {module.__name__}")
 
-    # Prefer class whose name matches the run keyword
     def score(cls):
         n = cls.__name__.lower()
         s = 0
@@ -94,7 +118,6 @@ def _pick_method_class(module, run_name: str):
         if "irm" in run and "irm" in n: s += 5
         if ("v2" in run or "disentangled" in run) and ("disentangled" in n or "pid" in n or "v2" in n): s += 5
         if "erm" in run and "erm" in n: s += 5
-        # Slightly prefer simpler names
         s -= (len(n) / 100.0)
         return s
 
@@ -103,121 +126,375 @@ def _pick_method_class(module, run_name: str):
 
 def build_method_from_run_name(run_name: str, backbone, num_classes: int):
     rn = run_name.lower()
-    if "dann" in rn:
-        mod = "dann"
-    elif "vrex" in rn:
-        mod = "vrex"
-    elif "irm" in rn:
-        mod = "irm"
-    elif rn == "v2" or "disentangled" in rn:
-        mod = "disentangled"
-    else:
-        mod = "erm"
+    if "dann" in rn: mod = "dann"
+    elif "vrex" in rn: mod = "vrex"
+    elif "irm" in rn: mod = "irm"
+    elif rn == "v2" or "disentangled" in rn or "pid" in rn: mod = "disentangled"
+    else: mod = "erm"
 
     module = importlib.import_module(f"src.methods.{mod}")
     cls = _pick_method_class(module, run_name)
-    try:
-        return cls(backbone, num_classes)
-    except TypeError:
-        # In case signature differs, give a clearer error
-        raise RuntimeError(f"Method class {cls.__name__} in {module.__name__} does not accept (backbone, num_classes).")
+    return cls(backbone, num_classes)
+
+# --- Analysis Functions ---
+
+def analyze_calibration(targets, probs, n_bins=10):
+    """
+    Compute ECE and Reliability Diagram data.
+    Assumes binary classification for simplicity (probs is (N, 2)) or take max prob.
+    """
+    # Use max probability for confidence
+    confidences = np.max(probs, axis=1)
+    predictions = np.argmax(probs, axis=1)
+    
+    accuracies = predictions == targets
+    
+    bin_boundaries = np.linspace(0, 1, n_bins + 1)
+    
+    ece = 0.0
+    bin_stats = []
+    
+    for bin_lower, bin_upper in zip(bin_boundaries[:-1], bin_boundaries[1:]):
+        in_bin = (confidences > bin_lower) & (confidences <= bin_upper)
+        prop_in_bin = np.mean(in_bin)
+        
+        if prop_in_bin > 0:
+            accuracy_in_bin = np.mean(accuracies[in_bin])
+            avg_confidence_in_bin = np.mean(confidences[in_bin])
+            ece += np.abs(avg_confidence_in_bin - accuracy_in_bin) * prop_in_bin
+            bin_stats.append((avg_confidence_in_bin, accuracy_in_bin, prop_in_bin))
+        else:
+            bin_stats.append((0, 0, 0))
+            
+    return ece, bin_stats
+
+def compute_dataset_leakage(model, loader, device):
+    """
+    Train a logistic regression probe on frozen features to predict Domain ID.
+    Returns accuracy.
+    """
+    model.eval()
+    all_feats, all_domains = [], []
+    
+    with torch.no_grad():
+        for batch in tqdm(loader, desc="Leakage Probe", leave=False):
+            x, _, d = [b.to(device) for b in batch[:3]]
+            
+            # Extract features
+            feats = forward_features(model, x) # (B, F)
+            if len(feats.shape) > 2:
+                feats = feats.mean(dim=-1) # Global average pooling if (B, C, L)
+            
+            all_feats.append(feats.cpu().numpy())
+            all_domains.append(d.cpu().numpy())
+            
+    X = np.concatenate(all_feats)
+    y = np.concatenate(all_domains)
+    
+    # Train simple classifier
+    clf = LogisticRegression(max_iter=200, solver='liblinear')
+    clf.fit(X, y)
+    acc = clf.score(X, y)
+    return acc
+
+def compute_frequency_attribution(model, loader, device, target_band=(58, 62), fs=100):
+    """
+    Compute Attribution Energy in target frequency band.
+    Using Input Gradients (Saliency).
+    """
+    model.eval()
+    attributions = []
+    
+    # Analyze a subset to save time
+    limit = 200
+    count = 0
+    
+    for batch in tqdm(loader, desc="Freq Attribution", leave=False):
+        x, y = batch[0].to(device), batch[1].to(device)
+        x.requires_grad = True
+        
+        logits = forward_logits(model, x)
+        score = logits.gather(1, y.view(-1, 1)).squeeze()
+        score.sum().backward()
+        
+        # Saliency: Abs gradients
+        saliency = x.grad.abs().cpu().numpy() # (B, C, L)
+        
+        # Take Lead I (index 0)
+        saliency_lead1 = saliency[:, 0, :] # (B, L)
+        
+        # FFT
+        n = saliency_lead1.shape[1]
+        freqs = np.fft.rfftfreq(n, d=1/fs)
+        fft_vals = np.abs(np.fft.rfft(saliency_lead1, axis=1)) # (B, n/2+1)
+        
+        # Sum energy in band
+        mask = (freqs >= target_band[0]) & (freqs <= target_band[1])
+        band_energy = fft_vals[:, mask].sum(axis=1)
+        total_energy = fft_vals.sum(axis=1)
+        
+        attributions.append(band_energy / (total_energy + 1e-8)) # Normalized
+        
+        count += len(x)
+        if count >= limit:
+            break
+            
+    return np.mean(np.concatenate(attributions))
+
+# --- Main Script ---
 
 @hydra.main(config_path="../config", config_name="main", version_base="1.2")
 def main(cfg: DictConfig):
-    log.info("Generating Results...")
+    log.info("Generating Comprehensive Results...")
 
-    split_name = cfg.get("eval", {}).get("split", "val")
-    base_dir   = cfg.get("eval", {}).get("base_dir", "outputs/baselines")
-    methods    = cfg.get("eval", {}).get("methods", ["erm_fixed", "dann_fixed", "vrex_fixed", "irm_fixed", "v2"])
-    out_dir    = cfg.get("eval", {}).get("out_dir", "results")
-
+    # Configuration for results
+    # User confirmed checkpoints are in outputs/
+    res_dir = "outputs" 
+    
+    methods = ["erm", "dann", "vrex", "irm", "v2"]
+    # Mapping for nice names
+    pretty_names = {"erm": "ERM", "dann": "DANN", "vrex": "V-REx", "irm": "IRM", "v2": "PID (Ours)"}
+    
+    # Data Setup
+    split_name = cfg.get("eval", {}).get("split", "test") # Default to test for final results
     log.info(f"Eval split: {split_name}")
-    log.info(f"Base dir: {base_dir}")
-    log.info(f"Runs: {methods}")
 
     manifest_df = pd.read_csv(cfg.data.paths.manifest_path)
     with open(cfg.data.paths.split_path, "r") as f:
         splits = json.load(f)
-
+    
     ids = _get_ids_from_splits(splits, split_name)
-    if not ids:
-        raise RuntimeError(f"No IDs found for split='{split_name}' in {cfg.data.paths.split_path}")
-
     df = manifest_df[manifest_df["unique_id"].isin(ids)]
     df = df[df["dataset_source"].isin(["ptbxl", "chapman"])]
-
+    
     import h5py
     with h5py.File(cfg.data.paths.processed_path, "r") as f:
         existing = set(f.keys())
     df = df[df["unique_id"].isin(existing)].reset_index(drop=True)
-
+    
     ds = ECGDataset(df, cfg.data.paths.processed_path)
     loader = DataLoader(ds, batch_size=cfg.train.batch_size, shuffle=False)
-
+    
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    out_dir = "results/figures"
     os.makedirs(out_dir, exist_ok=True)
 
-    domain_map = {0: "PTB-XL", 1: "Chapman"}
-    results = []
+    # Domain mapping needed specifically for OOD check
+    # In dataset.py: 0=PTB-XL (In-Domain), 1=Chapman (OOD)
+    domain_map = {0: "In-Domain", 1: "OOD"}
 
-    for run_name in methods:
-        ckpt_path = os.path.join(base_dir, run_name, "best_model.pt")
-        if not os.path.exists(ckpt_path):
-            log.warning(f"Checkpoint not found for {run_name} at {ckpt_path}. Skipping.")
-            continue
+    all_metrics = []
+    calibration_data = {}
+    pr_data = {}
+    dfs_cm = []
+    
+    for method_key in methods:
+        for condition in ["Clean", "Poisoned"]:
+            run_name = f"{method_key}_fixed" if condition == "Clean" else f"{method_key}_60hz"
+            if method_key == "v2" and condition == "Clean": run_name = "v2" # Exception based on dir structure
+            
+            # Determine path
+            # Look in results/baselines for Clean, results/shortcuts for Poisoned
+            sub_folder = "baselines" if condition == "Clean" else "shortcuts"
+            ckpt_path = os.path.join(res_dir, sub_folder, run_name, "best_model.pt")
+            
+            if not os.path.exists(ckpt_path):
+                log.warning(f"Checkpoint not found: {ckpt_path}. Skipping.")
+                continue
 
-        log.info(f"Evaluating {run_name} from {ckpt_path}...")
+            log.info(f"Processing {method_key} ({condition})...")
+            
+            # Load Model
+            backbone = hydra.utils.instantiate(cfg.model)
+            try:
+                model = build_method_from_run_name(run_name, backbone, cfg.model.num_classes)
+                state_dict = torch.load(ckpt_path, map_location=device)
+                model.load_state_dict(state_dict)
+                model.to(device)
+            except Exception as e:
+                log.error(f"Failed to load {run_name}: {e}")
+                continue
 
-        backbone = hydra.utils.instantiate(cfg.model)
-        model = build_method_from_run_name(run_name, backbone, cfg.model.num_classes)
+            # 1. Standard Eval
+            preds, targets, domains, probs = evaluate_model(model, loader, device, return_probs=True)
+            
+            # Metrics by Domain
+            for d_idx, d_name in domain_map.items():
+                mask = (domains == d_idx)
+                if mask.sum() == 0: continue
+                
+                y_true = targets[mask]
+                y_pred = preds[mask]
+                y_prob = probs[mask]
+                
+                f1 = f1_score(y_true, y_pred, average="macro", zero_division=0)
+                acc = accuracy_score(y_true, y_pred)
+                try:
+                    auroc = roc_auc_score(y_true, y_prob[:, 1]) if cfg.model.num_classes == 2 else 0
+                except:
+                    auroc = 0
+                
+                all_metrics.append({
+                    "Method": pretty_names[method_key],
+                    "Condition": condition,
+                    "Domain": d_name,
+                    "F1": f1,
+                    "FullMethod": f"{method_key}_{condition}",
+                    "AUROC": auroc
+                })
+                
+                # Store OOD data for specific plots
+                if d_name == "OOD":
+                    # Calibration
+                    ece, bin_stats = analyze_calibration(y_true, y_prob)
+                    calibration_data[(method_key, condition)] = (ece, bin_stats)
+                    all_metrics[-1]["ECE"] = ece
+                    
+                    # PR Curve
+                    if cfg.model.num_classes == 2:
+                        prec, rec, _ = precision_recall_curve(y_true, y_prob[:, 1])
+                        pr_auc = auc(rec, prec)
+                        pr_data[(method_key, condition)] = (prec, rec, pr_auc)
+                        all_metrics[-1]["AUPRC"] = pr_auc
+                    
+                    # Confusion Matrix Data (Store for PID vs ERM)
+                    if method_key in ["erm", "v2"]:
+                        dfs_cm.append({
+                             "method": method_key,
+                             "condition": condition,
+                             "y_true": y_true,
+                             "y_pred": y_pred
+                        })
 
-        state_dict = torch.load(ckpt_path, map_location=device)
-        model.load_state_dict(state_dict)
-        model.to(device)
+            # 2. Leakage Analysis
+            leak_acc = compute_dataset_leakage(model, loader, device)
+            all_metrics.append({
+                "Method": pretty_names[method_key],
+                "Condition": condition,
+                "Domain": "Leakage",
+                "Accuracy": leak_acc,
+                "FullMethod": f"{method_key}_{condition}"
+            })
+            
+            # 3. Frequency Attribution (Poisoned Checks)
+            freq_score = compute_frequency_attribution(model, loader, device)
+            all_metrics.append({
+                "Method": pretty_names[method_key],
+                "Condition": condition,
+                "Domain": "FreqAttribution",
+                "Score": freq_score, 
+                "FullMethod": f"{method_key}_{condition}"
+            })
 
-        preds, targets, domains = evaluate_model(model, loader, device)
-
-        acc = accuracy_score(targets, preds)
-        f1 = f1_score(targets, preds, average="macro", zero_division=0)
-        results.append({"run": run_name, "split": split_name, "domain": "Overall", "acc": acc, "f1": f1})
-
-        for d_idx, d_name in domain_map.items():
-            mask = (domains == d_idx)
-            if mask.sum() > 0:
-                d_acc = accuracy_score(targets[mask], preds[mask])
-                d_f1 = f1_score(targets[mask], preds[mask], average="macro", zero_division=0)
-                results.append({"run": run_name, "split": split_name, "domain": d_name, "acc": d_acc, "f1": d_f1})
-
-        cm = confusion_matrix(targets, preds, normalize="true")
-        plt.figure(figsize=(10, 8))
-        sns.heatmap(cm, annot=True, fmt=".2f", cmap="Blues")
-        plt.title(f"Confusion Matrix ({split_name}): {run_name}")
-        plt.ylabel("True Label")
-        plt.xlabel("Predicted Label")
-        plt.savefig(os.path.join(out_dir, f"cm_{split_name}_{run_name}.png"))
-        plt.close()
-
-    if not results:
-        log.warning("No models evaluated.")
-        return
-
-    df_res = pd.DataFrame(results)
-    out_csv = os.path.join(out_dir, f"final_metrics_{split_name}.csv")
-    df_res.to_csv(out_csv, index=False)
-
-    print("\n=== Final Results ===")
-    print(df_res)
-
+    # Save raw metrics
+    df_res = pd.DataFrame(all_metrics)
+    df_res.to_csv(os.path.join(out_dir, "all_results.csv"), index=False)
+    
+    # --- PLOTTING ---
+    sns.set_theme(style="whitegrid")
+    
+    # 1. Performance Comparison (F1)
     plt.figure(figsize=(10, 6))
-    sns.barplot(data=df_res, x="run", y="f1", hue="domain")
-    plt.title(f"Method Comparison by Domain ({split_name})")
-    plt.ylabel("Macro F1 Score")
-    plt.xticks(rotation=25, ha="right")
+    subset = df_res[df_res["Domain"].isin(["In-Domain", "OOD"])]
+    sns.barplot(data=subset, x="Method", y="F1", hue="Condition", ci=None) # ci=None as we have single run results here
+    plt.title("Cross-Dataset Performance (Clean vs Poisoned)")
+    plt.ylabel("Macro F1")
+    plt.savefig(os.path.join(out_dir, "performance_comparison.png"))
+    plt.close()
+    
+    # 2. Delta OOD Drop
+    # Pivot to calculate drops
+    drops = []
+    for m in pretty_names.values():
+        for c in ["Clean", "Poisoned"]:
+            row_in = subset[(subset["Method"] == m) & (subset["Condition"] == c) & (subset["Domain"] == "In-Domain")]
+            row_ood = subset[(subset["Method"] == m) & (subset["Condition"] == c) & (subset["Domain"] == "OOD")]
+            if not row_in.empty and not row_ood.empty:
+                drop = row_in.iloc[0]["F1"] - row_ood.iloc[0]["F1"]
+                drops.append({"Method": m, "Condition": c, "Delta OOD": drop})
+    
+    plt.figure(figsize=(8, 5))
+    sns.barplot(data=pd.DataFrame(drops), x="Method", y="Delta OOD", hue="Condition")
+    plt.title("Performance Drop (In-Domain - OOD)")
+    plt.ylabel("Δ F1")
+    plt.savefig(os.path.join(out_dir, "ood_drop.png"))
+    plt.close()
+    
+    # 3. Calibration
+    fig, axes = plt.subplots(1, 2, figsize=(12, 5), sharey=True)
+    for i, cond in enumerate(["Clean", "Poisoned"]):
+        ax = axes[i]
+        for m_key in methods:
+            if (m_key, cond) not in calibration_data: continue
+            ece, stats = calibration_data[(m_key, cond)]
+            confs = [s[0] for s in stats]
+            accs = [s[1] for s in stats]
+            ax.plot(confs, accs, marker='o', label=f"{pretty_names[m_key]} (ECE={ece:.2f})")
+        ax.plot([0,1], [0,1], 'k--', alpha=0.5)
+        ax.set_title(f"{cond} Models (OOD)")
+        ax.set_xlabel("Confidence")
+        if i == 0: ax.set_ylabel("Accuracy")
+        ax.legend()
     plt.tight_layout()
-    plt.savefig(os.path.join(out_dir, f"method_comparison_{split_name}.png"))
+    plt.savefig(os.path.join(out_dir, "calibration.png"))
+    plt.close()
+    
+    # 4. PR Curves
+    fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+    for i, cond in enumerate(["Clean", "Poisoned"]):
+        ax = axes[i]
+        for m_key in methods:
+            if (m_key, cond) not in pr_data: continue
+            prec, rec, pr_auc = pr_data[(m_key, cond)]
+            ax.plot(rec, prec, label=f"{pretty_names[m_key]} (AUC={pr_auc:.2f})")
+        ax.set_title(f"PR Curve ({cond}) - OOD")
+        ax.set_xlabel("Recall")
+        if i == 0: ax.set_ylabel("Precision")
+        ax.legend()
+    plt.tight_layout()
+    plt.savefig(os.path.join(out_dir, "pr_curves.png"))
+    plt.close()
+    
+    # 5. Dataset Leakage
+    plt.figure(figsize=(8, 5))
+    leak_df = df_res[df_res["Domain"] == "Leakage"]
+    sns.barplot(data=leak_df, x="Method", y="Accuracy", hue="Condition")
+    plt.axhline(0.5, color='r', linestyle='--', label="Random Guess")
+    plt.title("Domain Identity Leakage (Probe Accuracy)")
+    plt.ylabel("Probe Accuracy")
+    plt.legend()
+    plt.savefig(os.path.join(out_dir, "leakage.png"))
+    plt.close()
+    
+    # 6. Frequency Attribution
+    plt.figure(figsize=(8, 5))
+    freq_df = df_res[df_res["Domain"] == "FreqAttribution"]
+    sns.barplot(data=freq_df, x="Method", y="Score", hue="Condition")
+    plt.title("Attribution to 60Hz Band")
+    plt.ylabel("Relative Energy")
+    plt.savefig(os.path.join(out_dir, "freq_attribution.png"))
     plt.close()
 
-    log.info(f"Saved metrics to {out_csv} and plots to {out_dir}/")
+    # 7. Confusion Matrix Diff (PID - ERM for Poisoned)
+    # Find ERM Poisoned and PID Poisoned
+    erm_p = next((x for x in dfs_cm if x["method"] == "erm" and x["condition"] == "Poisoned"), None)
+    pid_p = next((x for x in dfs_cm if x["method"] == "v2" and x["condition"] == "Poisoned"), None)
+    
+    if erm_p and pid_p:
+        cm_erm = confusion_matrix(erm_p["y_true"], erm_p["y_pred"], normalize='true')
+        cm_pid = confusion_matrix(pid_p["y_true"], pid_p["y_pred"], normalize='true')
+        
+        diff = cm_pid - cm_erm
+        
+        plt.figure(figsize=(8, 6))
+        sns.heatmap(diff, annot=True, fmt=".2f", cmap="RdBu_r", center=0)
+        plt.title("Confusion Matrix Difference (PID - ERM) [Poisoned]")
+        plt.ylabel("True Label")
+        plt.xlabel("Predicted Label")
+        plt.savefig(os.path.join(out_dir, "cm_diff_poisoned.png"))
+        plt.close()
+
+    log.info(f"Done! Results saved to {out_dir}")
 
 if __name__ == "__main__":
     main()
