@@ -20,6 +20,91 @@ import inspect
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from src.dataset import ECGDataset
+from omegaconf import OmegaConf
+import re
+
+# --- checkpoint key remapping helper (auto-added) ---
+def _remap_state_dict_for_erm(state_dict):
+    """Map DANN-style keys -> ERM expected keys.
+    task_classifier.* -> model.fc.* ; drop domain_* keys
+    """
+    new_sd = {}
+    for k, v in state_dict.items():
+        if k.startswith('task_classifier.'):
+            new_sd['model.fc.' + k.split('.', 1)[1]] = v
+        elif k.startswith('domain_') or k.startswith('domain_adversary.') or k.startswith('domain_predictor.'):
+            continue
+        else:
+            new_sd[k] = v
+    return new_sd
+
+def _infer_resnet1d_arch_from_sd(sd):
+    """Infer ResNet1d (planes, layers) from state_dict keys/shapes."""
+    planes = [None, None, None, None]
+    for li in range(1, 5):
+        k = f"model.layer{li}.0.conv1.weight"
+        if k in sd:
+            planes[li-1] = int(sd[k].shape[0])
+    if planes[0] is None and 'model.conv1.weight' in sd:
+        planes[0] = int(sd['model.conv1.weight'].shape[0])
+    if any(x is None for x in planes):
+        return None
+    layer_counts = [0, 0, 0, 0]
+    rx = re.compile(r'^model\.layer([1-4])\.(\d+)\.')
+    for k in sd.keys():
+        m = rx.match(k)
+        if not m:
+            continue
+        li = int(m.group(1)) - 1
+        bi = int(m.group(2))
+        layer_counts[li] = max(layer_counts[li], bi + 1)
+    if any(c == 0 for c in layer_counts):
+        return None
+    return {'planes': planes, 'layers': layer_counts}
+
+def _rebuild_resnet1d_from_sd(sd, default_model=None):
+    """Rebuild ResNet1d to match checkpoint backbone widths."""
+    arch = _infer_resnet1d_arch_from_sd(sd)
+    if arch is None:
+        raise RuntimeError('Could not infer ResNet1d arch from state_dict')
+    from src.models.resnet1d import ResNet1d
+    # num_classes from classifier weight
+    if 'model.fc.weight' in sd:
+        num_classes = int(sd['model.fc.weight'].shape[0])
+    elif 'task_classifier.weight' in sd:
+        num_classes = int(sd['task_classifier.weight'].shape[0])
+    else:
+        num_classes = getattr(default_model, 'num_classes', None) or 7
+    input_channels = getattr(default_model, 'input_channels', None) or 12
+    m = ResNet1d(input_channels=input_channels, num_classes=num_classes, layers=arch['layers'], planes=arch['planes'])
+    m._inferred_layers = arch['layers']
+    m._inferred_planes = arch['planes']
+    return m
+
+def _safe_load_state_dict_for_eval(model, state_dict, strict=True):
+    """Robust load for eval (supports DANN checkpoints and FC mismatches). Returns model."""
+    log = logging.getLogger(__name__)
+    sd = state_dict
+    has_task = isinstance(sd, dict) and any(k.startswith('task_classifier.') for k in sd.keys())
+    remapped = _remap_state_dict_for_erm(sd) if has_task else sd
+    try:
+        model.load_state_dict(remapped, strict=strict)
+        return model
+    except RuntimeError as e:
+        msg = str(e)
+        if 'size mismatch for model.fc.weight' in msg or 'size mismatch for model.fc.bias' in msg:
+            log.warning('FC size mismatch detected; attempting to rebuild ResNet1d to match checkpoint backbone')
+            new_model = _rebuild_resnet1d_from_sd(remapped, default_model=model)
+            log.warning('Rebuilt model with inferred planes=%s layers=%s', getattr(new_model, '_inferred_planes', None), getattr(new_model, '_inferred_layers', None))
+            new_model.load_state_dict(remapped, strict=False)
+            return new_model
+        if has_task:
+            log.warning('Remapping task_classifier -> model.fc and dropping domain_* keys for ERM load')
+            model.load_state_dict(remapped, strict=False)
+            return model
+        raise
+# --- end checkpoint key remapping helper ---
+
 
 log = logging.getLogger(__name__)
 
@@ -140,6 +225,12 @@ def _get_ids_from_splits(splits: dict, split_name: str):
 
 @hydra.main(config_path="../config", config_name="main", version_base="1.2")
 def main(cfg: DictConfig):
+
+    # Resolve config nesting: supports both `data.paths.*` and `data.data.paths.*`
+    paths = OmegaConf.select(cfg, "data.paths") or OmegaConf.select(cfg, "data.data.paths")
+    if paths is None:
+        raise KeyError("Could not find paths at data.paths or data.data.paths")
+
     log.info("Running standalone Frequency Attribution Analysis...")
     
     # Path setup
@@ -153,8 +244,8 @@ def main(cfg: DictConfig):
     # Data Loading (Minimal)
     split_name = cfg.get("eval", {}).get("split", "test")
     
-    manifest_df = pd.read_csv(cfg.data.paths.manifest_path)
-    with open(cfg.data.paths.split_path, "r") as f:
+    manifest_df = pd.read_csv(paths.manifest_path)
+    with open(paths.split_path, "r") as f:
         splits = json.load(f)
     
     ids = _get_ids_from_splits(splits, split_name)
@@ -163,11 +254,11 @@ def main(cfg: DictConfig):
     
     # Filter for processed file
     import h5py
-    with h5py.File(cfg.data.paths.processed_path, "r") as f:
+    with h5py.File(paths.processed_path, "r") as f:
         existing = set(f.keys())
     df = df[df["unique_id"].isin(existing)].reset_index(drop=True)
     
-    ds = ECGDataset(df, cfg.data.paths.processed_path)
+    ds = ECGDataset(df, paths.processed_path)
     loader = DataLoader(ds, batch_size=cfg.train.batch_size, shuffle=False)
     
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -196,7 +287,7 @@ def main(cfg: DictConfig):
             try:
                 model = build_method_from_run_name(run_name, backbone, cfg.model.num_classes)
                 state_dict = torch.load(ckpt_path, map_location=device)
-                model.load_state_dict(state_dict)
+                model = _safe_load_state_dict_for_eval(model, state_dict)
                 model.to(device)
             except Exception as e:
                 log.error(f"Error loading {run_name}: {e}")

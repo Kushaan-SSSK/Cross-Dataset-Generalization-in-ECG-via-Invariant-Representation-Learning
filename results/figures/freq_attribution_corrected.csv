@@ -1,0 +1,11 @@
+Method,Condition,Score
+ERM,Clean,0.0
+ERM,Poisoned,0.0
+DANN,Clean,0.0
+DANN,Poisoned,0.0
+V-REx,Clean,0.0
+V-REx,Poisoned,0.0
+IRM,Clean,0.0
+IRM,Poisoned,0.0
+PID (Ours),Clean,0.0
+PID (Ours),Poisoned,0.0

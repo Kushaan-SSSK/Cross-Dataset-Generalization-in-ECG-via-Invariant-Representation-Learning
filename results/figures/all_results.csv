@@ -1,41 +1,33 @@
-Method,Condition,Domain,F1,FullMethod,AUROC,ECE,Accuracy,Score
-ERM,Clean,In-Domain,0.3491529263643488,erm_Clean,0.0,,,
-ERM,Clean,OOD,0.8468464091018454,erm_Clean,0.0,0.007048288609237122,,
-ERM,Clean,Leakage,,erm_Clean,,,0.999103607977889,
-ERM,Clean,FreqAttribution,,erm_Clean,,,,0.0
-ERM,Poisoned,In-Domain,0.404785229501996,erm_Poisoned,0.0,,,
-ERM,Poisoned,OOD,0.8316254268678416,erm_Poisoned,0.0,0.05260121231195819,,
-ERM,Poisoned,Leakage,,erm_Poisoned,,,0.9981325166206021,
-ERM,Poisoned,FreqAttribution,,erm_Poisoned,,,,0.0
-DANN,Clean,In-Domain,0.24481478452291777,dann_Clean,0.0,,,
-DANN,Clean,OOD,0.843296615162864,dann_Clean,0.0,0.015325405986777223,,
-DANN,Clean,Leakage,,dann_Clean,,,0.9982819152909539,
-DANN,Clean,FreqAttribution,,dann_Clean,,,,0.0
-DANN,Poisoned,In-Domain,0.24079670590708574,dann_Poisoned,0.0,,,
-DANN,Poisoned,OOD,0.7549813563211494,dann_Poisoned,0.0,0.025987713865590067,,
-DANN,Poisoned,Leakage,,dann_Poisoned,,,0.9992530066482408,
-DANN,Poisoned,FreqAttribution,,dann_Poisoned,,,,0.0
-V-REx,Clean,In-Domain,0.24581382385730213,vrex_Clean,0.0,,,
-V-REx,Clean,OOD,0.8057308531340703,vrex_Clean,0.0,0.007613484758332104,,
-V-REx,Clean,Leakage,,vrex_Clean,,,0.9973855232688429,
-V-REx,Clean,FreqAttribution,,vrex_Clean,,,,0.0
-V-REx,Poisoned,In-Domain,0.2649497225580158,vrex_Poisoned,0.0,,,
-V-REx,Poisoned,OOD,0.8170335864494811,vrex_Poisoned,0.0,0.0254564662321103,,
-V-REx,Poisoned,Leakage,,vrex_Poisoned,,,0.9987301113020094,
-V-REx,Poisoned,FreqAttribution,,vrex_Poisoned,,,,0.0
-IRM,Clean,In-Domain,0.12183543666780287,irm_Clean,0.0,,,
-IRM,Clean,OOD,0.19225557237138421,irm_Clean,0.0,0.1765837956569377,,
-IRM,Clean,Leakage,,irm_Clean,,,0.9467393740195712,
-IRM,Clean,FreqAttribution,,irm_Clean,,,,0.0
-IRM,Poisoned,In-Domain,0.09507903370116313,irm_Poisoned,0.0,,,
-IRM,Poisoned,OOD,0.15614233445800174,irm_Poisoned,0.0,0.13110548007302092,,
-IRM,Poisoned,Leakage,,irm_Poisoned,,,0.9371778591170539,
-IRM,Poisoned,FreqAttribution,,irm_Poisoned,,,,0.0
-PID (Ours),Clean,In-Domain,0.0,v2_Clean,0.0,,,
-PID (Ours),Clean,OOD,0.03148617130315915,v2_Clean,0.0,0.2772388778043514,,
-PID (Ours),Clean,Leakage,,v2_Clean,,,1.0,
-PID (Ours),Clean,FreqAttribution,,v2_Clean,,,,0.0
-PID (Ours),Poisoned,In-Domain,0.0,v2_Poisoned,0.0,,,
-PID (Ours),Poisoned,OOD,0.07374104941894588,v2_Poisoned,0.0,0.1991003197825672,,
-PID (Ours),Poisoned,Leakage,,v2_Poisoned,,,0.7195786957496079,
-PID (Ours),Poisoned,FreqAttribution,,v2_Poisoned,,,,0.0
+Method,Condition,Domain,F1,FullMethod,AUROC,ECE,AUPRC,Accuracy,Score
+ERM,Clean,In-Domain,0.3491529263643488,erm_Clean,0.0,,,,
+ERM,Clean,OOD,0.8468464091018454,erm_Clean,0.0,0.007048288609237122,0.999167748878985,,
+ERM,Clean,Leakage,,erm_Clean,,,,0.999103607977889,
+ERM,Clean,FreqAttribution,,erm_Clean,,,,,0.0
+ERM,Poisoned,In-Domain,0.404785229501996,erm_Poisoned,0.0,,,,
+ERM,Poisoned,OOD,0.8316254268678416,erm_Poisoned,0.0,0.05260121231195819,0.9973679282765368,,
+ERM,Poisoned,Leakage,,erm_Poisoned,,,,0.9981325166206021,
+ERM,Poisoned,FreqAttribution,,erm_Poisoned,,,,,0.0
+DANN,Clean,In-Domain,0.24481478452291777,dann_Clean,0.0,,,,
+DANN,Clean,OOD,0.843296615162864,dann_Clean,0.0,0.015325405986777223,0.9983156027396642,,
+DANN,Clean,Leakage,,dann_Clean,,,,0.9982819152909539,
+DANN,Clean,FreqAttribution,,dann_Clean,,,,,0.0
+DANN,Poisoned,In-Domain,0.24079670590708574,dann_Poisoned,0.0,,,,
+DANN,Poisoned,OOD,0.7549813563211494,dann_Poisoned,0.0,0.025987713865590067,0.9972472378876466,,
+DANN,Poisoned,Leakage,,dann_Poisoned,,,,0.9992530066482408,
+DANN,Poisoned,FreqAttribution,,dann_Poisoned,,,,,0.0
+V-REx,Clean,In-Domain,0.24581382385730213,vrex_Clean,0.0,,,,
+V-REx,Clean,OOD,0.8057308531340703,vrex_Clean,0.0,0.007613484758332104,0.9981386523607026,,
+V-REx,Clean,Leakage,,vrex_Clean,,,,0.9973855232688429,
+V-REx,Clean,FreqAttribution,,vrex_Clean,,,,,0.0
+V-REx,Poisoned,In-Domain,0.2649497225580158,vrex_Poisoned,0.0,,,,
+V-REx,Poisoned,OOD,0.8170335864494811,vrex_Poisoned,0.0,0.0254564662321103,0.9983242283519291,,
+V-REx,Poisoned,Leakage,,vrex_Poisoned,,,,0.9987301113020094,
+V-REx,Poisoned,FreqAttribution,,vrex_Poisoned,,,,,0.0
+IRM,Clean,In-Domain,0.12183543666780287,irm_Clean,0.0,,,,
+IRM,Clean,OOD,0.19225557237138421,irm_Clean,0.0,0.1765837956569377,0.9621860753093097,,
+IRM,Clean,Leakage,,irm_Clean,,,,0.9467393740195712,
+IRM,Clean,FreqAttribution,,irm_Clean,,,,,0.0
+IRM,Poisoned,In-Domain,0.09507903370116313,irm_Poisoned,0.0,,,,
+IRM,Poisoned,OOD,0.15614233445800174,irm_Poisoned,0.0,0.13110548007302092,0.9591145173810242,,
+IRM,Poisoned,Leakage,,irm_Poisoned,,,,0.9371778591170539,
+IRM,Poisoned,FreqAttribution,,irm_Poisoned,,,,,0.0
