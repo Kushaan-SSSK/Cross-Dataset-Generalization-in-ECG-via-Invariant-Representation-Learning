@@ -72,7 +72,7 @@ This penalty discourages the learning of unstable, spurious correlations that va
 We propose a two-stage evaluation protocol designed to expose latent fragility.
 
 **1) Cross-Dataset Task:**
-We utilize **PTB-XL** (Germany, Schiller devices) as the Source Domain and **Chapman-Shaoxing** (China, GE devices) as the Target Domain. This constitutes a severe distribution shift involving both patient population demographics and hardware signal processing pipelines. Models are trained strictly on PTB-XL and evaluated on Chapman without any target domain adaptation (Zero-Shot).
+We utilize **PTB-XL** (Germany, Schiller devices) as the Source Domain and **Chapman-Shaoxing** (China, GE devices) as the Target Domain. This constitutes a severe distribution shift involving both patient population demographics and hardware signal processing pipelines. Notably, PTB-XL contains a diverse range of 71 morphological pathologies (e.g., myocardial infarction, hypertrophy) [4], whereas Chapman is dominated by distinct rhythm abnormalities (e.g., Atrial Fibrillation) [5]. Models are trained strictly on PTB-XL and evaluated on Chapman without any target domain adaptation (Zero-Shot).
 
 **2) Shortcut Amplification Stress Test (SAST):**
 To mechanically verify if models are avoiding spurious features, we deliberately inject a known "shortcut" during training.
@@ -105,8 +105,8 @@ The task involves classifying samples into diagnostic super-classes (Normal vs. 
 
 ### A. Generalization Gap (Clean Training)
 Table I presents the baseline generalization performance. We observe a peculiar **inverted generalization gap**, where models perform better on the Target (Chapman, F1 $\approx$ 0.85) than the Source (PTB-XL, F1 $\approx$ 0.35).
-*   **Explanation:** This reflects the fundamental nature of the datasets. PTB-XL is a "wild" dataset with diverse, multi-label pathologies and lower signal-to-noise ratio, whereas Chapman-Shaoxing is a curated, 4-class dataset with high-quality traces.
-*   **Takeaway:** The benchmark accurately reflects that the Source task is harder than the Target task. Despite this, the *relative* ranking of methods remains consistent.
+*   **Explanation:** This reflects the asymmetry in task difficulty. PTB-XL requires detecting subtle morphological changes (e.g., ST-elevation) amidst a "wild" distribution of comorbidities. In contrast, the Chapman evaluation focuses on major rhythmic classes (e.g., AFIB vs Sinus Rhythm) which have distinct, high-amplitude signatures that are easier to classify even under distribution shift.
+*   **Takeaway:** The benchmark accurately captures that the Source task is significantly harder than the Target task. Despite this, the *relative* ranking of methods remains consistent.
 
 ### B. Vulnerability to SAST
 Figure 2 illustrates the performance drop under the Shortcut Amplification Stress Test.
