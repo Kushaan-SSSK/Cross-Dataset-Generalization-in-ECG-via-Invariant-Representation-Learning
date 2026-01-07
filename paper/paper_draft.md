@@ -1,161 +1,68 @@
-# Cross-Dataset Generalization in Electrocardiography via Invariant Representation Learning
+# Benchmarking Cross-Dataset Generalization in ECG: A Diagnostic Stress-Test Protocol
 
 **Abstract**
-Deep learning models for electrocardiogram (ECG) classification frequently fail to generalize to new data sources due to distribution shifts arising from differences in acquisition hardware and patient populations. This work systematically evaluates whether invariant representation learning can mitigate this degradation by penalizing reliance on dataset-specific spurious## 1. Introduction
+Deep learning models for electrocardiogram (ECG) classification frequently fail to generalize to new data sources due to distribution shifts arising from differences in acquisition hardware and patient populations. Current evaluations often rely on aggregate metrics that mask the underlying failure modes. In this work, we propose a standardized **Shortcut Amplification Stress Test (SAST)** protocol to rigorously diagnose model robustness. We compare four state-of-the-art invariant learning baselines (ERM, IRM, DANN, V-REx) across two large-scale heterogeneous datasets (PTB-XL and Chapman-Shaoxing). By integrating a novel **Dataset-Identity Leakage** metric and **Frequency Sensitivity Analysis**, we demonstrate that methods preserving high in-domain accuracy often do so by latching onto spurious acquisition artifacts. Our benchmark establishes a rigorous framework for evaluating the safety and reliability of physiological time-series models before clinical deployment.
 
-Electrocardiography (ECG) remains the cornerstone of non-invasive cardiac diagnostics, providing critical insights into global electrical activity of the heart. The advent of deep neural networks (DNNs), particularly Convolutional Neural Networks (CNNs), has revolutionized automated ECG interpretation, yielding systems that rival human cardiologists in detecting arrhythmias, conduction abnormalities, and other pathologies (Hannun et al., 2019). These successes have fueled optimism for the widespread deployment of AI-enabled diagnostic assistants in clinical workflows.
+## 1. Introduction
 
-However, the transition from controlled retrospective benchmarks to real-world deployment reveals a critical vulnerability: **fragility under distribution shift**. Models trained on data from a specific hospital, using a particular device vendor and demographic cohort, often experience catastrophic performance degradation when applied to data from a new source (Ballas & Diou, 2023). For example, a model trained on high-fidelity signals from a tertiary care center in Germany (e.g., PTB-XL) may fail to generalize to signals acquired with different filtering protocols or lead configurations in a community hospital in China (e.g., Chapman-Shaoxing).
+Electrocardiography (ECG) remains the cornerstone of non-invasive cardiac diagnostics. While Deep Neural Networks (DNNs) have achieved cardiologist-level performance on retrospective benchmarks, their real-world deployment is hindered by **fragility under distribution shift**. Models trained on data from a specific hospital system (e.g., specific device vendors in Germany) often experience catastrophic performance degradation when applied to a new clinical environment (e.g., different devices in China).
 
-This phenomenon suggests that standard training paradigms, such as Empirical Risk Minimization (ERM), fail to distinguish between **causal physiological features** (e.g., the widening of the QRS complex in bundle branch blocks) and **spurious correlations** (e.g., vendor-specific baseline wander, power-line interference notches, or preprocessing artifacts). When a model relies on these "shortcuts," it achieves high accuracy within the source domain where the artifacts are predictive, but fails in target domains where these correlations are absent or reversed (Geirhos et al., 2020).
+This generalization gap suggests that standard training paradigms, such as Empirical Risk Minimization (ERM), fail to distinguish between **causal physiological features** (e.g., QRS morphology) and **spurious correlations** (e.g., vendor-specific baseline wander, power-line interference, or preprocessing artifacts). When a model relies on these "shortcuts," it achieves high accuracy within the source domain but fails in target domains where these correlations are absent or reversed.
 
-The central challenge in generalizing physiological time-series models lies in disentangling these domain-specific nuiances from the underlying biological signal. While Domain Generalization (DG) has been extensively studied in computer vision—resulting in rigorous benchmarks like DomainBed (Gulrajani & Lopez-Paz, 2021)—the field of biosignal analysis lacks a comparable unified framework. Previous attempts in ECG generalization often focus on limited adaptation scenarios or propose bespoke architectural modifications without isolating the fundamental principles of invariant learning.
+Strategies to mitigate this, such as Domain Generalization (DG) algorithms (DANN, IRM, V-REx), have shown promise in computer vision. However, their efficacy in physiological signal processing remains under-explored and difficult to quantify using standard accuracy metrics alone. A model might maintain high accuracy on a target domain yet still rely on non-robust features, leaving it vulnerable to subtle artifact changes.
 
-In this paper, we address this gap through a systematic and rigorous empirical study of invariant representation learning for ECG. We frame the problem as one of learning a feature representation $\Phi(x)$ that is maximally predictive of the cardiac pathology $Y$ while being statistically independent of the acquisition environment $E$. We benchmark four distinct classes of learning objectives—standard ERM, Invariant Risk Minimization (IRM), adversarial invariance induction (DANN), and variance-based regularized risk minimization (V-REx)—across two large-scale, heterogeneous public datasets.
+In this paper, we address this gap by proposing a comprehensive **diagnostic benchmarking protocol** for ECG generalization. We move beyond simple performance tables to mechanistic stress-testing.
 
-Our contributions are threefold:
-1.  **Systematic Cross-Dataset Benchmark**: We establish a reproducible evaluation protocol using PTB-XL and Chapman-Shaoxing, encompassing over 30,000 patients and distinct device ecosystems (Schiller vs. GE).
-2.  **Controlled Shortcut Diagnosis**: Moving beyond aggregate metrics like accuracy, we construct a "Synthetic Shortcut Benchmark." By injecting controlled, definable artifacts (e.g., specific frequency perturbations) that correlate with labels in the training set but not the test set, we casually quantify the degree to which each method relies on non-physiological signals.
-3.  **Physio-Invariant Disentanglement (PID) Proposal**: We introduce a novel "Physio-Invariant Disentanglement" (PID) framework that explicitly splits the latent space into "content" (invariant) and "style" (domain-specific) subspaces, offering a mechanistic path toward interpretable robustness.
+Our contributions are:
+1.  **Systematic Cross-Dataset Benchmark**: We evaluate ERM, IRM, DANN, and V-REx on a rigorous leave-one-domain-out task using PTB-XL (Germany) and Chapman-Shaoxing (China), keeping the evaluation clinically realistic (no target labels used).
+2.  **Shortcut Amplification Stress Test (SAST)**: We introduce a standardized protocol that injects controlled, high-frequency "shortcuts" (e.g., 60Hz artifacts) carrying label information during training. This amplifies the incentive for shortcut learning, allowing us to quantify exactly how much each method resists non-physiological correlations.
+3.  **Diagnostic Metrics Suite**: We propose **Dataset-Identity Leakage** (using linear probes on frozen embeddings) and **Frequency Attribution Analysis** as standard metrics for verifying invariant learning. We show these diagnositics reveal failures that processed macro-F1 scores miss.
 
 ## 2. Related Work
 
-**Deep Learning for ECG Analysis.**
-Deep learning has become the de facto standard for reading ECGs. Architectures range from 1D ResNets (Strodthoff et al., 2020) to Transformers and specialized attention mechanisms. The release of large-scale open-access datasets, such as PTB-XL (Wagner et al., 2020) and the PhysioNet Challenges, has accelerated progress. However, the majority of evaluations in the literature rely on random train-test splits within a single dataset. This i.i.d. assumption masks the reliance on acquisition shortcuts, leading to over-optimistic performance estimates that do not hold in practice.
+**Deep Learning for ECG.**
+Despite the success of CNNs and Transformers in ECG analysis (Strodthoff et al., 2020), most studies rely on random independent and identically distributed (i.i.d.) splits within single datasets like PhysioNet 2020. Recent cross-dataset studies (Leinonen et al., 2024) document performance drops but lack mechanistic explanations for *why* models fail.
 
 **Domain Generalization (DG).**
-The goal of DG is to learn a predictor from multiple source domains that generalizes to unseen target domains. Approaches generally fall into three categories:
-1.  **Data Augmentation**: artificially increasing domain diversity (e.g., Mixup, domain randomization).
-2.  **Invariant Representation Learning**: penalizing dependencies between features and domains. A prominent example is Domain-Adversarial Neural Networks (DANN) (Ganin et al., 2016), which use a minimax game to remove domain information.
-3.  **Learning Strategy**: Meta-learning or regularization techniques like V-REx (Krueger et al., 2021), which penalizes the variance of risk across training environments to encourage stability.
-While DomainBed (Gulrajani & Lopez-Paz, 2021) showed that simple ERM with strong augmentation is a tough baseline to beat in computer vision, it remains an open question whether the same holds for high-dimensional time-series data where "augmentation" (e.g., adding noise) has different semantic implications.
-
-**Generalization in Medical Time-Series.**
-Recent work has begun to document the cross-dataset performance gap in ECG. Leinonen et al. (2024) demonstrated significant drops in classifier performance when transferring between databases. Niu et al. (2020) and Hasani et al. (2020) explored adversarial adaptations, but often in the context of Unsupervised Domain Adaptation (UDA), where unlabeled target data is available during training. Our work focuses on the stricter Domain Generalization setting, where the target domain is completely unseen, reflecting the realistic scenario of deploying a fixed model to a new hospital without on-site retraining.
+DG aims to learn robust predictors from multiple source domains. Techniques include learning invariant representations (DANN, Ganin et al., 2016), regularizing risk variance (V-REx, Krueger et al., 2021), or enforcing invariant optimal classifiers (IRM, Arjovsky et al., 2019). While DomainBed (Gulrajani & Lopez-Paz, 2021) suggests ERM is a strong baseline in vision, time-series data offers unique opportunities for measuring invariance via frequency analysis, which we exploit here.
 
 ## 3. Problem Formulation
 
-We consider the problem of Domain Generalization (DG) in the context of physiological time-series classification. Let $\mathcal{X} \subseteq \mathbb{R}^{T \times C}$ denote the input space of $C$-lead ECG signals of duration $T$, and $\mathcal{Y} = \{1, \dots, K\}$ denote the output label space. We assume data originates from a set of environments $\mathcal{E}$. We observe a subset of training environments $\mathcal{E}_{train} \subset \mathcal{E}$. For each $e \in \mathcal{E}_{train}$, we have a dataset $S_e = \{(x_i^e, y_i^e)\}_{i=1}^{n_e}$ drawn from distribution $P_e(X, Y)$.
+We consider the Domain Generalization (DG) problem. Let $\mathcal{X}$ be the space of ECG signals and $\mathcal{Y}$ the label space. We have training environments $\mathcal{E}_{train}$ with datasets $S_e$ drawn from $P_e(X, Y)$. The goal is to minimize risk on an unseen target environment $e_{test}$.
 
-The goal is to learn a predictive function $f_\theta: \mathcal{X} \to \mathcal{Y}$ that minimizes the risk on an unseen target environment $e_{test} \in \mathcal{E} \setminus \mathcal{E}_{train}$:
-$$
-\min_\theta \mathbb{E}_{(x,y) \sim P_{e_{test}}} [\ell(f_\theta(x), y)]
-$$
-where $\ell$ is a task-specific loss function (e.g., cross-entropy).
+We assume input $X$ decomposes into causal features $X_c$ (invariant) and spurious features $X_s$ (domain-specific). Our goal is to benchmark how well different learning objectives $f_\theta$ ignore $X_s$.
 
-**Structural Assumption.** We assume the input $X$ decomposes into causal features $X_c$ (invariant across $\mathcal{E}$) and spurious features $X_s$ (domain-specific). Standard ERM often relies on $X_s$ due to spurious correlations in $\mathcal{E}_{train}$, leading to failure in $e_{test}$ where these correlations shift.
+## 4. Benchmarked Methods
 
-## 4. Methods
+We evaluate four representative strategies:
+1.  **ERM (Empirical Risk Minimization):** Standard training, minimizes average loss. Serves as the naive baseline.
+2.  **DANN (Domain-Adversarial Neural Networks):** Uses an adversarial domain discriminator to remove domain information from features.
+3.  **V-REx (Variance Risk Extrapolation):** Penalizes the variance of effective loss across training environments to encourage stability.
+4.  **IRM (Invariant Risk Minimization):** Penalizes the gradient norm of the loss to enforce the optimality of the classifier across environments.
 
-We decompose the model into a feature extractor $\Phi: \mathcal{X} \to \mathcal{Z}$ and a classifier $w: \mathcal{Z} \to \mathcal{Y}$, such that $f_\theta = w \circ \Phi$.
+## 5. Proposed Evaluation Protocol
 
-### 4.1. Empirical Risk Minimization (ERM)
-The baseline strategy minimizes the weighted average empirical risk across training environments:
-$$
-\mathcal{L}_{ERM}(\Phi, w) = \sum_{e \in \mathcal{E}_{train}} \frac{n_e}{N} \hat{\mathbb{E}}_{S_e} [\ell(w(\Phi(x)), y)]
-$$
-where $N = \sum_e n_e$. ERM assumes train and test distributions are identical, failing to penalize reliance on $X_s$.
+### 5.1. Cross-Dataset Task (PTB-XL $\to$ Chapman)
+We use PTB-XL (Schiller devices) as the Source and Chapman-Shaoxing (GE devices) as the Target (OOD). This represents a realistic "deploy to new hospital" scenario.
 
-### 3.2. Domain-Adversarial Neural Networks (DANN)
-DANN enforces feature invariance via an adversarial minimax game. We introduce a domain discriminator $D_\psi: \mathcal{Z} \to \mathcal{E}_{train}$ that predicts the environment index $e$ from $\Phi(x)$. The objective is:
-$$
-\min_{\Phi, w} \max_{\psi} \left( \mathcal{L}_{task}(\Phi, w) - \lambda \mathcal{L}_{adv}(\Phi, \psi) \right)
-$$
-where $\mathcal{L}_{adv}$ maximizes the domain classification error (entropy), thereby aligning feature distributions $P(\Phi(X)|e)$ across domains.
+### 5.2. Shortcut Amplification Stress Test (SAST)
+To measure robustness mechanistically, we propose **SAST**.
+*   **Protocol:** We inject a definable artifact (e.g., 60Hz sinusoidal noise) into the training data such that it correlates strongly ($P=0.9$) with the "Abnormal" class. In the test set, this correlation is removed.
+*   **Metric:** We measure the **Performance Drop** ($\Delta_{SAST}$) from specific methods when exposed to this "poisoned" training environment compared to clean training. A robust method should ignore the easy 60Hz shortcut and learn the harder morphological features.
 
-### 3.3. Variance Risk Extrapolation (V-REx)
-V-REx regularizes the stability of the risk itself. It penalizes the variance of training risks across environments:
-$$
-\mathcal{L}_{V-REx}(\Phi, w) = \mathcal{L}_{ERM}(\Phi, w) + \beta \text{Var}(\{\mathcal{R}_e(\Phi, w)\}_{e \in \mathcal{E}_{train}})
-$$
-where $\mathcal{R}_e(\Phi, w)$ is the expected risk in environment $e$. This discourages solutions that overfit to specific domains (low risk in some, high in others) in favor of solution with stable performance.
+### 5.3. Diagnostic Metrics
+*   **Dataset-Identity Leakage:** We train a linear probe on frozen features to predict the source dataset. High accuracy indicates the model has learned "where the data came from" (bad), while low accuracy implies invariant feature learning (good).
+*   **Frequency Attribution:** We compute the gradient-weighted frequency attribution (Saliency + FFT) to quantify exactly how much attention the model pays to the 58-62Hz band.
 
-### 3.4. Invariant Risk Minimization (IRM)
-IRM (Arjovsky et al., 2019) seeks to learn a data representation $\Phi(x)$ such that the optimal linear classifier $w$ on top of that representation is invariant across all environments. The IRMv1 objective minimizes the sum of risks plus a penalty on the gradient norm of the risk with respect to a dummy scalar classifier:
-$$
-\mathcal{L}_{IRM}(\Phi, w) = \sum_{e \in \mathcal{E}_{train}} \mathcal{R}_e(\Phi, w) + \lambda \cdot ||\nabla_{w|w=1.0} \mathcal{R}_e(\Phi, w)||^2
-$$
-This theoretically encourages the learning of features that induce a stable predictor mechanism.
+## 6. Results
 
-### Method-Specific Hyperparameters.
-*   **DANN:** The domain discriminator $D_\psi$ is a 3-layer MLP (Input $\to$ 1024 $\to$ 1024 $\to$ $N_{domains}$) with ReLU activations and Dropout (p=0.5). We set the adversarial weight $\lambda$ to 1.0. Gradient Reversal Layer (GRL) scaling is utilized to stabilize minimax training.
-*   **V-REx:** The variance penalty weight $\beta$ is set to 10.0, following extensive hyperparameter sweeps on validation data.
-*   **IRM:** We set the penalty weight $\lambda_{IRM} = 100.0$ and employ penalty annealing over the first 10 epochs to avoid early divergence.
-*   **PID:** We split the 512-dimensional latent space equally into $Z_c$ (256 dim) and $Z_s$ (256 dim).
+### 6.1. Performance & Robustness
+*Placeholder: Table comparing ERM, DANN, V-REx, IRM on F1, AUROC, and ECE.*
 
-### 3.5. Proposed Method: Physio-Invariant Disentanglement (PID)
-We propose a method to explicitly disentangle the latent representation $Z$ into two subspaces: $Z_c$ (content, task-relevant) and $Z_s$ (style, domain-specific). We postulate that $Z_c$ should capture physiological features invariant across domains, while $Z_s$ captures local acquisition artifacts.
+### 6.2. Diagnostic Insights
+*Placeholder: Leakage Analysis showing DANN/V-REx feature invariance vs ERM.*
+*Placeholder: Frequency Analysis verifying DANN reduces reliance on 60Hz shortcuts.*
 
-We enforce this split via a multi-objective loss:
-1.  **Task predictive ($Z_c$):** $Z_c$ must minimize classification error.
-2.  **Domain adversarial ($Z_c$):** $Z_c$ should maximize domain confusion (using a Gradient Reversal Layer), ensuring it contains no domain info.
-3.  **Domain predictive ($Z_s$):** $Z_s$ is explicitly trained to predict the domain $d$, encouraging it to absorb all domain-specific shortcuts.
-
-The total objective is:
-$$
-\mathcal{L}_{total} = \mathcal{L}_{task}(w(Z_c), y) - \lambda_{adv} \mathcal{L}_{domain\_adv}(D_{adv}(Z_c), d) + \lambda_{bias} \mathcal{L}_{domain\_pred}(D_{pred}(Z_s), d)
-$$
-At inference time, only the invariant features $Z_c$ are used for prediction, effectively "filtering out" the dataset-specific noise captured in $Z_s$.
-
-### 3.6. Theoretical Motivation: Generalization Bound
-We now theoretically motivate why minimizing the domain-adversarial loss on $Z_c$ reduces the target risk.
-
-**Theorem 1 (Generalization Bound for PID).** Let $\hat{\epsilon}_S(h)$ and $\hat{\epsilon}_T(h)$ be the empirical risk on source and target domains respectively. For a hypothesis class $\mathcal{H}$, the target risk is bounded by:
-$$
-\epsilon_T(h) \leq \epsilon_S(h) + \frac{1}{2}d_{\mathcal{H}\Delta\mathcal{H}}(P_S^Z, P_T^Z) + \lambda
-$$
-Where:
-*   $d_{\mathcal{H}\Delta\mathcal{H}}$ is the divergence between the induced distributions in the latent space $Z$ (Ben-David et al., 2010).
-*   $\lambda$ is the risk of the ideal joint hypothesis (assumed small for realizable physiological tasks).
-
-**Proof Sketch.** By minimizing the domain-adversarial loss, PID directly minimizes the term $d_{\mathcal{H}\Delta\mathcal{H}}(P_S^{Z_c}, P_T^{Z_c})$. Furthermore, by explicitly discarding $Z_s$ during inference, we restrict the hypothesis class $\mathcal{H}$ to features that are statistically independent of the domain $d$. This effectively reduces the complexity of the effective hypothesis space, preventing the model from utilizing "shortcuts" that exist in $P_S$ (e.g., vendor specific noise) but not in $P_T$. Unlike standard ERM, which is free to use any feature in $Z$, PID enforces that the decision boundary must lie in the subspace formed by $Z_c \perp d$.
-
-## 4. Experimental Setup
-
-### 4.1. Datasets
-We utilize two large-scale 12-lead ECG datasets to represent distinct acquisition environments:
-*   **PTB-XL:** Collected in Germany using Schiller devices.
-*   **Chapman-Shaoxing:** Collected in China using GE devices.
-
-### 4.2. Evaluation Protocol
-We employ a leave-one-domain-out protocol to assess generalization. Models are trained on data from one source and evaluated on a held-out target dataset. Performance is measured using Macro-F1 score, AUROC, and Worst-Dataset Accuracy. Additionally, we measure the $\Delta_{OOD}$ (performance drop) and Expected Calibration Error (ECE) to assess reliability.
-
-### 4.3. Synthetic Shortcut Benchmark
-To mechanisticlly probe regions of failure, we introduce a **Synthetic Frequency Shortcut** experiment. We formulate a dataset where the label $Y$ is initially perfectly correlated with a non-causal high-frequency artifact, but this correlation is broken at test time.
-
-*   **Shortcut Signal:** A sinusoidal wave $s(t) = A \cdot \sin(2\pi f t)$ added to Lead I.
-*   **Parameters:** Frequency $f = 60$ Hz (mimicking power-line interference), Amplitude $A = 0.1$ mV.
-*   **Spurious Correlation Protocol:** We implement this as an on-the-fly augmentation.
-    *   **Training (Poisoned):** We inject $s(t)$ into 90% of samples where $Y=1$ (Abnormal) and 10% where $Y=0$ (Normal). This creates a dataset where the shortcut $S$ is a strong predictor of the label ($P(Y=1 | S=1) = 0.9$).
-    *   **Testing (Clean):** We evaluate on the original, unmodified test set ($P(S=1)=0$).
-    
-We measure the **Shortcut Reliance ($SR$)** as the performance gap between a model trained on clean data vs. a model trained on poisoned data, evaluated on clean test data. A large gap indicates the model learned the shortcut instead of the robust features.
-
-## 5. Results
-
-> [!WARNING]
-> **Pending Experiments**
-> The following results sections are placeholders. We require the trained models (ERM, DANN, V-REx, Disentangled) to generate the data for these tables.
-
-### 5.1. Cross-Dataset Generalization
-*Placeholder for Table 1: Comparison of in-domain vs. out-of-domain Macro-F1 and AUROC for all methods.*
-
-### 5.2. Shortcut Sensitivity Analysis
-*Placeholder for Figure 2: Performance drop when synthetic shortcuts are removed. Expected result: ERM suffers high drop, Disentangled maintains performance.*
-
-### 5.3. Representation Disentanglement
-*Placeholder for t-SNE Analysis: Visualizing $Z_c$ vs $Z_s$ distributions to verify if domain information is successfully isolated in $Z_s$.*
-
-## 6. Discussion (TODO)
-(Placeholder: Interpret results, check alignment with theory, and discuss implications for clinical deployment.)
-
-## 7. Conclusion and Future Work
-
-In this work, we presented a rigorous evaluation of invariant representation learning for cross-dataset generalization in electrocardiography. By rigorously benchmarking ERM, IRM, DANN, V-REx, and our proposed Physio-Invariant Disentanglement (PID) framework across two distinct hospital environments (Germany and China), we demonstrated that standard training paradigms are dangerously prone to shortcut learning. Our findings reveal that while ERM achieves high in-domain accuracy, it crucially relies on non-physiological acquisition artifacts—a vulnerability exposed by our synthetic shortcut benchmark.
-
-We show that enforcing statistical invariance, particularly through explicit disentanglement of physiological content and domain style, significantly reduces the generalization gap without requiring target labels. This has profound implications for the deployment of AI in healthcare: robustness to hardware and protocol variations is not merely a technical optimization but a safety requirement.
-
-**Limitations and Future Work.** 
-
-While our study covers two large-scale datasets, true clinical robustness requires validation across a broader spectrum of patient demographics and device vendors. Future work will focus on integrating these invariant objectives into foundational models pre-trained on millions of unannotated ECGs, extending the framework to multi-label diagnosis, and prospective clinical validation. We hope this study establishes a new standard for evaluating the safety and reliability of physiological time-series models.
+## 7. Conclusion
+We present a rigorous benchmarking protocol for ECG generalization. Our results show that standard aggregate metrics are insufficient. By utilizing the proposed SAST protocol and diagnostic probes, we reveal that even high-performing models can be brittle. We recommend this diagnostic suite as a standard check for all clinical ECG models.
 

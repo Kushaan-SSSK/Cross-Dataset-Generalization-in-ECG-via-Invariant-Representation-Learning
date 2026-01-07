@@ -390,10 +390,14 @@ def main(cfg: DictConfig):
     # User confirmed checkpoints are in outputs/
     res_dir = "outputs" 
     
-    methods = ["erm", "dann", "vrex", "irm", "v2"]
+    methods = ["erm", "dann", "vrex", "irm"]
     # Mapping for nice names
-    pretty_names = {"erm": "ERM", "dann": "DANN", "vrex": "V-REx", "irm": "IRM", "v2": "PID (Ours)"}
-    
+    pretty_names = {
+        "erm": "ERM", 
+        "dann": "DANN", 
+        "vrex": "V-REx", 
+        "irm": "IRM"
+    }
     # Data Setup
     split_name = cfg.get("eval", {}).get("split", "test") # Default to test for final results
     log.info(f"Eval split: {split_name}")
