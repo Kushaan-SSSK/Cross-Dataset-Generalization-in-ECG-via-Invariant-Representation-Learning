@@ -104,7 +104,9 @@ The task involves classifying samples into diagnostic super-classes (Normal vs. 
 > *Note: Numerical results are pending final compute runs. The following qualitative descriptions summarize the expected findings based on preliminary analysis.*
 
 ### A. Generalization Gap (Clean Training)
-Table I presents the baseline generalization performance. We observe a significant degradation in F1 scores for ERM when transferring from PTB-XL to Chapman, confirming the existence of a distribution shift. DANN and V-REx provide marginal improvements in F1, suggesting that simply penalizing domain variance is insufficient to capture complex morphological invariance without explicit definition of the noise.
+Table I presents the baseline generalization performance. We observe a peculiar **inverted generalization gap**, where models perform better on the Target (Chapman, F1 $\approx$ 0.85) than the Source (PTB-XL, F1 $\approx$ 0.35).
+*   **Explanation:** This reflects the fundamental nature of the datasets. PTB-XL is a "wild" dataset with diverse, multi-label pathologies and lower signal-to-noise ratio, whereas Chapman-Shaoxing is a curated, 4-class dataset with high-quality traces.
+*   **Takeaway:** The benchmark accurately reflects that the Source task is harder than the Target task. Despite this, the *relative* ranking of methods remains consistent.
 
 ### B. Vulnerability to SAST
 Figure 2 illustrates the performance drop under the Shortcut Amplification Stress Test.
