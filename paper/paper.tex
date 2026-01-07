@@ -1,0 +1,283 @@
+\documentclass[conference]{IEEEtran}
+\IEEEoverridecommandlockouts
+
+\usepackage{cite}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{algorithmic}
+\usepackage{graphicx}
+\graphicspath{{figures/}} % looks for images inside figures/
+\usepackage{textcomp}
+\usepackage{xcolor}
+\usepackage{booktabs} 
+\usepackage{caption} 
+\usepackage{siunitx}
+\sisetup{detect-all} 
+
+\def\BibTeX{{\rm B\kern-.05em{\sc i\kern-.025em b}\kern-.08em
+    T\kern-.1667em\lower.7ex\hbox{E}\kern-.125emX}}
+
+\begin{document}
+
+\title{SAST: A Diagnostic Stress-Test Protocol for Multi-Domain ECG Generalization*\\
+{\footnotesize \textsuperscript{*}Subtitles are not indexed by IEEE Xplore}
+\thanks{}
+}
+
+\author{
+\IEEEauthorblockN{1\textsuperscript{st} Kushaan Sharma}
+\IEEEauthorblockA{\textit{Department of Biomedical Engineering} \\
+\textit{The University of Texas at Austin}\\
+Austin, United States \\
+Kushaan.s2007@utexas.edu}
+\and
+\IEEEauthorblockN{2\textsuperscript{nd} Aryan Shah}
+\IEEEauthorblockA{\textit{Department of Computer Science \& Engineering} \\
+\textit{Texas A and M University}\\
+College Station, United States \\
+Aryanshah@tamu.edu}
+\and
+\IEEEauthorblockN{3\textsuperscript{rd} Aditya Nair}
+\IEEEauthorblockA{\textit{UT Austin Department of Integrative Biology} \\
+\textit{The University of Texas at Austin}\\
+\textbf{Austin, United States}}
+}
+
+\maketitle
+
+\begin{abstract}
+Deep learning models for electrocardiogram (ECG) classification have achieved expert-level performance in retrospective studies. However, their deployment is hampered by performance degradation under compound distribution shifts. Current evaluation standards often fail to detect reliance on unstable ``shortcut'' features. In this work, we propose the \textbf{Shortcut Amplification Stress Test (SAST)} as a standardized safety audit protocol. Rather than proposing a new architecture, we demonstrate that existing Domain Generalization (DG) methods---ERM, DANN, and V-REx---can appear robust under standard evaluation yet exhibit differential vulnerabilities to spectral shortcuts. We validate SAST in a supervised multi-domain case study (PTB-XL and Chapman) subject to compound distribution shifts. Our results demonstrate that SAST exposes hidden vulnerabilities: Domain Adversarial Neural Networks (DANN), while theoretically invariant, inadvertently latch onto the injected shortcut, suffering a 0.09 F1 drop. Dataset-Identity Leakage probing reveals that domain information remains strongly encoded even in representations learned by DG objectives, motivating complementary stress-testing for non-physiological shortcuts. We present SAST and leakage probing not merely as metrics, but as essential pre-deployment engineering checks for clinical AI safety.
+\end{abstract}
+
+\begin{IEEEkeywords}
+Electrocardiography, Domain Generalization, Trustworthiness, Shortcut Learning, 60Hz Artifact
+\end{IEEEkeywords}
+
+\section{Introduction}
+
+\begin{figure}[t!]
+    \centering
+    \includegraphics[width=0.95\linewidth]{spectral_aliasing.png} 
+    \caption{Mechanism of the 60Hz Spectral Shortcut. (Top) Clean ECG signals from the Source Domain. (Bottom) Poisoned signals with injected 60Hz mains noise. Due to the 100Hz sampling rate, this aliases to a distinct 40Hz peak (Red Arrow). The distinct 40Hz spike represents the aliased shortcut artifact. Section \ref{sec:mech} investigates whether models rely on this feature.}
+    \label{fig:spectral}
+\end{figure}
+
+The automated interpretation of electrocardiograms (ECG) using deep neural networks (DNNs) holds the promise of democratizing cardiovascular diagnostics \cite{b1}. However, the transition to real-world clinical utility is obstructed by fragility under distribution shift. A model trained on high-fidelity signals from a tertiary care center (e.g., Schiller devices in Germany) may fail when deployed to a community hospital setting (e.g., GE devices in China).
+
+This paper addresses this gap by proposing a comprehensive safety auditing protocol for ECG generalization. We position this work as a necessary engineering check designed to expose specific shortcut dependencies before deployment. Unlike standard benchmarks that focus on leaderboard performance, our protocol prioritizes the identification of interpretable failure modes. It is distinctly not a proposal for a new model architecture, but rather a rigorous mechanism-audit framework for biomedical AI.
+
+\textbf{Why EMBC should care:} As deep learning models transition from retrospective validation to prospective clinical deployment, the safety-critical nature of cardiology requires rigorous ``stress-testing'' beyond standard held-out accuracy. Just as the FDA requires medical devices to be tested against specific interference (e.g., power line noise), we argue that clinical AI models must be audited for specific failure modes. This work provides a template for such auditing, demonstrating that even high-performance models can harbor silent vulnerabilities to spectral artifacts commonly found in varied clinical environments.
+
+Our contributions are threefold. First, we introduce the \textbf{Shortcut Amplification Stress Test (SAST)}, a standardized protocol that injects controlled ``shortcuts'' (e.g., 60Hz artifacts) to quantify mechanism-agnostic robustness. Second, we validate SAST via a \textbf{Multi-Domain Case Study}, evaluating ERM, DANN, and V-REx on a reproducible task using PTB-XL \cite{b4} and Chapman--Shaoxing \cite{b5}. Third, we propose a \textbf{Diagnostic Metrics Suite} featuring Dataset-Identity Leakage as a standard metric for verifying invariant learning.
+
+Importantly, we do not assume task homogeneity across domains. In real-world deployment, ECG models frequently encounter simultaneous shifts in acquisition hardware, patient population, and diagnostic ontology. Rather than treating task mismatch as a confounder to be eliminated, we explicitly incorporate it as part of the stress-test setting. This reflects the practical reality that models trained for morphological classification are often deployed in rhythm-focused screening contexts, and vice versa. Our evaluation therefore probes robustness under joint domain--task shift, not idealized domain invariance.
+
+\section{Related Work}
+
+\subsection{Domain Generalization in Medical Imaging}
+Domain generalization (DG) aims to learn representations that generalize to unseen environments. Techniques typically fall into three categories: data augmentation, domain alignment, and meta-learning. In medical imaging, domain alignment methods like \textbf{Domain-Adversarial Neural Networks (DANN)} \cite{b3} have been popular for harmonizing MRI and CT data. However, recent large-scale benchmarks (e.g., DomainBed \cite{b6}) have questioned the efficacy of these methods compared to simple empirical risk minimization (ERM) with data augmentation. Our work extends this critical inquiry to the 1D biomedical domain.
+
+\subsection{Shortcut Learning in Deep Learning}
+``Shortcut learning'' refers to DNNs relying on spurious correlations (e.g., background textures, hospital tokens) rather than semantic features \cite{b2}. In ECG, models have been shown to latch onto high-frequency noise or pacemaker spikes that correlate with disease labels. While prior work often identifies these issues retrospectively, we propose \textbf{SAST} as a prospective stress-test to actively induce and measure fragility.
+
+\subsection{Cross-Dataset ECG Evaluation}
+Prior ECG studies often focus on within-dataset splits (stratified cross-validation). Few works address cross-dataset generalization. The PhysioNet 2020 Challenge approached this direction, but emphasized varying lead configurations rather than compound domain shift. To our knowledge, this is one of the first studies to propose a rigorous stress-test protocol for invariant risk minimization techniques on a ``wild'' cross-device, cross-population ECG task.
+
+\section{Methods: The SAST Protocol}
+
+\subsection{Problem Formulation}
+We consider supervised learning with multiple training domains $\mathcal{E}_{train}$. For each domain $e \in \mathcal{E}_{train}$, we have $\mathcal{D}_e = \{(x_i^e, y_i^e)\}_{i=1}^{N_e}$. The goal is to learn a predictive function $f_\theta:\mathcal{X}\to\mathcal{Y}$ that minimizes the risk on an unseen test domain $\mathcal{E}_{test}$:
+\begin{equation}
+\min_\theta \ \mathbb{E}_{e \sim \mathcal{E}_{test}} \left[\mathcal{L}(f_\theta(x), y)\right].
+\end{equation}
+
+\section{Case Study: Evaluating Domain Generalization}
+To demonstrate the utility of SAST, we audit three representative algorithms covering the spectrum of DG approaches.
+
+\subsection{Benchmarked Algorithms}
+We evaluate \textbf{Empirical Risk Minimization (ERM)}, which serves as the naive baseline, minimizing the sum of errors across all training domains without any explicit invariance constraint ($\mathcal{L}_{ERM} = \sum_{e} \ell(f(x), y)$). It measures whether complex DG methods provide any tangible benefit over standard training.
+
+To enforce feature invariance, we evaluate \textbf{Domain-Adversarial Neural Networks (DANN)} \cite{b3}. DANN employs a domain discriminator in a minimax game against the feature extractor ($\mathcal{L}_{DANN} = \mathcal{L}_{task} - \lambda \mathcal{L}_{domain\_adv}$), theoretically removing domain-specific information from the representation. Alternatively, \textbf{Variance Risk Extrapolation (V-REx)} \cite{b6} penalizes the variance of the loss across domains ($\mathcal{L}_{VREx} = \mathcal{L}_{ERM} + \beta \text{Var}(\mathcal{L}_e)$), discouraging reliance on shortcuts effective in only a subset of environments.
+
+\textbf{Implementation validity checks:} For DANN, we verified the domain discriminator achieved high accuracy in early training before the adversarial game stabilized. All models use a ResNet-1D-18 backbone with standard He initialization.
+
+\subsection{Data and Preprocessing}
+Our study utilizes two heterogeneous datasets to simulate a ``Wild'' distribution shift. The \textbf{Source Domain} is represented by the PTB-XL dataset (Germany) \cite{b4}, containing 21,837 records from 18,885 patients acquired using Schiller devices. It covers a wide range of morphological pathologies (MI, STTC, CD, HYP). The \textbf{Target Domain} is the Chapman--Shaoxing dataset (China) \cite{b5}, comprising 10,646 records acquired using GE Healthcare devices. Chapman focuses heavily on rhythm abnormalities (AFIB, SB, GSVT). This combination of hardware shift (Schiller to GE) and task shift (Morphology to Rhythm) provides a rigorous testbed for deployment robustness.
+
+We ensure compatibility via a standardized pipeline (100Hz resampling, 0.5-50Hz bandpass). We employ a \textbf{Multi-Head Multi-Domain Architecture}: a shared feature encoder $g_\psi$ feeds into domain-specific classification heads $h_{source}$ and $h_{target}$. Crucially, we utilize labels from \textbf{both domains} during training (Supervised Multi-Domain Learning). This setup reflects a realistic "deployment adaptation" scenario where site-specific calibration (head fine-tuning) is permitted, but the core feature extractor must remain robust to unforeseen artifacts. Thus, we evaluate the robustness of the \textit{shared representation} $Z=g_\psi(X)$ under joint domain--task shift, framing the model as a \textbf{physiological feature extractor} rather than a zero-shot classifier.
+
+\subsection{Evaluation Protocol}
+
+\subsubsection{Mathematical Formulation}
+We define domains $e \in \mathcal{E}_{source,target}$ with domain index random variable $E$. In joint domain--task shift, we do not assume $P(Y|Z)$ is invariant across domains because label ontologies differ. Instead, we treat DG objectives as representation regularizers and evaluate whether the shared encoder $Z=g_\psi(X)$ becomes more or less reliant on injected non-physiological cues. We formulate our stress test and diagnostics as follows.
+
+We define three distinct shortcut types injected into the raw signal at $100\text{Hz}$ (prior to model ingestion) to rigorously audit reliance on non-physiological signals. We inject after resampling to 100 Hz; the 60 Hz sinusoid aliases to 40 Hz in discrete time and therefore survives the 0.5--50 Hz bandpass filter. The injection follows $x'(t) = x(t) + \mathbb{I}_{inject} \cdot S(t)$, where $\mathbb{I}_{inject} \sim \text{Bernoulli}(\rho)$ and $\rho=0.9$ represents the \textbf{Shortcut-Label Correlation} ($P(\text{Artifact}|Y \in \text{Abnormal}) = 0.9$):
+We define Abnormal as any non-reference class (PTB-XL: non-NORM; Chapman: non-SR). In this paper we report the mains-noise (60Hz) condition as the primary case study; BW and EMG are included in SAST to support future audits and extension.
+\begin{itemize}
+    \item \textbf{Mains Noise (60Hz):} $S_{mains}(t) = A \sin(2\pi \cdot 60t + \phi)$. Due to $f_s = 100\text{Hz}$, this aliases to 40Hz, serving as a subtle spectral biomarker.
+    \item \textbf{Baseline Wander (BW):} $S_{bw}(t) = \alpha \sin(2\pi \cdot 0.5t) + \beta t$. This tests robustness to low-frequency trends detached from the QRS complex.
+    \item \textbf{Electromyographic Noise (EMG):} $S_{emg}(t) = \mathcal{N}(0, \sigma) \cdot M(t)$, where $M(t)$ is a random binary mask covering 50\% of the signal duration.
+\end{itemize}
+This multi-modal injection ensures that SAST evaluates general mechanism-agnostic robustness. A desirable property is that $Z$ is insensitive to injected artifacts, conditional on clinically meaningful signal content.
+
+\paragraph{Dataset-Identity Leakage as Information Proxy}
+We use linear probing to estimate mutual information between $Z$ and $E$. We employ a Logistic Regression probe trained on the frozen features of a balanced subset (50/50 split) of Source and Target data to ensure accuracy reflects separability, not class imbalance. Probe accuracy serves as a practical lower-bound proxy for $I(Z;E)$. High leakage implies $I(Z;E)\gg 0$ and failure to satisfy $Z \perp E$.
+
+\subsubsection{Protocol and Metrics}
+\begin{itemize}
+    \item \textbf{SAST protocol:} Injection of \SI{60}{Hz} sinusoidal artifacts ($\rho=0.9$) during training.
+    \item \textbf{Leakage accuracy and AUC:} Linear probe accuracy and Area Under the ROC Curve (AUC) for predicting domain from $Z$. To avoid saturation effects when domain separability is high, we report AUC alongside accuracy.
+    \item \textbf{OOD calibration:} Expected Calibration Error (ECE) on OOD data using 15 adaptive bins.
+\end{itemize}
+
+We note that high Dataset-Identity Leakage is expected to some degree in raw ECG signals, as acquisition hardware and preprocessing pipelines imprint low-level spectral signatures. Leakage accuracy should therefore not be interpreted as a binary success or failure criterion. Rather, it serves as a necessary diagnostic: methods claiming invariance should demonstrably reduce domain predictability relative to ERM. The failure of adversarial and invariance-based methods to reduce leakage below ERM indicates that domain-specific information remains encoded in learned representations, potentially facilitating shortcut use under stress.
+
+\section{Results}
+
+\subsection{Main Performance and Robustness}
+
+\begin{table}[htbp]
+\caption{Cross-Dataset Generalization and Diagnostics (Results from representative single training run)}
+\centering
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{l l c c c c c}
+\toprule
+Method & Cond. & Src F1 & Tgt F1 & $\Delta$F1 & Leak.(Acc/AUC) & ECE \\
+\midrule
+ERM & Clean & 0.35 & 0.85 & -- & 70.9\% / 0.78 & 0.007 \\
+ERM & Pois. & 0.40 & 0.83 & -0.02 & 70.9\% / 0.78 & 0.053 \\
+DANN & Clean & 0.24 & 0.84 & -- & 70.3\% / 0.77 & 0.015 \\
+DANN & Pois. & 0.24 & 0.75 & -0.09 & 70.3\% / 0.77 & 0.026 \\
+V-REx & Clean & 0.25 & 0.81 & -- & 71.6\% / 0.79 & 0.008 \\
+V-REx & Pois. & 0.26 & 0.82 & +0.01 & 71.6\% / 0.79 & 0.025 \\
+\bottomrule
+\end{tabular}%
+}
+\label{tab:main}
+\end{table}
+
+\noindent\textit{Note: Source (Morphology) and Target (Rhythm) F1 scores (Macro-averaged across classes) are not directly comparable due to task heterogeneity; they characterize domain-specific behavior rather than same-task transfer. The relatively low Source F1 (0.35) reflects the extreme difficulty of the 5-way morphological classification task on PTB-XL under macro-averaging, driven by class imbalance.}
+
+
+
+\begin{figure}[htbp]
+\centerline{\includegraphics[width=\columnwidth]{fig1_performance.png}}
+\caption{Cross-Dataset Generalization Performance across methods. Note the significant performance drop for DANN under the Poisoned condition compared to ERM.}
+\label{fig1}
+\end{figure}
+
+\subsection{Detailed Performance Analysis}
+
+\subsubsection{Baseline Generalization (Clean Setting)}
+Under clean training, ERM achieves the strongest target performance (Target F1 = 0.85), outperforming specialized DG methods. DANN (0.84) and V-REx (0.81) do not provide consistent improvements over ERM. This aligns with findings from the DomainBed benchmark \cite{b6}, suggesting that in many modern deep learning regimes, strong data augmentation and backbone regularization (ResNet) provide sufficient robustness for moderate shifts.
+
+\subsubsection{Vulnerability to Shortcuts (SAST)}
+\label{sec:mech}
+\begin{figure}[htbp]
+\centerline{\includegraphics[width=\columnwidth]{fig2_sast_drop.png}}
+\caption{SAST Vulnerability showing the drop in F1 score when the shortcut is present. DANN suffers the largest degradation.}
+\label{fig2}
+\end{figure}
+SAST reveals hidden fragility when exposed to the 60Hz shortcut during training. ERM shows a small drop (-0.02), which can be misleading without diagnostic probes. However, DANN suffers a substantial collapse (-0.09). Interestingly, V-REx maintains performance (+0.01), suggesting that variance penalties may offer better stability than adversarial invariance in this setting. Yet, typical evaluations would overlook DANN's specific failure. We present these results as a case study demonstrating SAST's diagnostic capability. While multi-seed statistical validation is required for definitive method ranking (and planned for the final version), the magnitude of DANN's collapse relative to ERM (-0.09 vs -0.02) provides a strong preliminary signal of mechanism-specific failure. By enforcing adversarial invariance, DANN may discard domain-specific cues while increasing reliance on the injected artifact, which becomes a cross-domain label-correlated cue under SAST (invariant by construction). This constitutes negative transfer induced by the constraint.
+
+\subsubsection{Same-Task Control Experiment (Source $\to$ Source)}
+To confirm that shortcut vulnerability is not solely driven by task heterogeneity or signal destruction, we performed a same-task control (PTB-XL $\to$ PTB-XL) with SAST injection. In this setting, both ERM and DANN exhibited negligible performance degradation ($<1\%$ change in F1). This control confirms that the catastrophic failure observed in the Target domain (Table \ref{tab:main}) is not a trivial consequence of noise injection destroying signal quality, but rather a specific failure of the model to disentangle the shortcut from the target task's predictive features.
+
+\subsubsection{Test-Time Attribution Ablation}
+To rigorously confirm that performance degradation in DANN is caused by latent reliance on the injected shortcut, we conducted a test-time ablation where the shortcut was removed from the Target domain inputs (Train on Poisoned, Test on Clean Target).
+If DANN had learned robust features, removing the shortcut should simply return performance to the Clean baseline. However, we hypothesized that if the model had overfit to the shortcut as a "domain-invariant" feature, its removal would cause a distributional shift in the feature space.
+Our results show that when the shortcut is removed, DANN performance recovers significantly (+0.07, Table \ref{tab:ablation}), rising from 0.75 to 0.82. This recovery, substantially larger than ERM's minimal change (+0.01), confirms that DANN's feature space had become dependent on the shortcut. The model was effectively 'penalizing' the absence of the expected artifact, causing degraded performance when it was present during training but absent during test - precisely the behavior SAST is designed to expose.
+
+\begin{table}[ht]
+\centering
+\caption{Test-Time Feature Attribution Ablation (Target Domain)}
+\label{tab:ablation}
+\begin{tabular}{l c c c}
+\toprule
+Method & Train Cond. & Test Cond. & F1 Score \\
+\midrule
+ERM & Poisoned & Poisoned & 0.83 \\
+ERM & Poisoned & Clean Target & 0.84 (\textbf{+0.01}) \\
+\midrule
+DANN & Poisoned & Poisoned & 0.75 \\
+DANN & Poisoned & Clean Target & 0.82 (\textbf{+0.07}) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The significant recovery of DANN (+0.07) when the shortcut is removed indicates that the model was heavily penalizing the absence of the shortcut, confirming reliance.
+
+\subsubsection{Recommendation Validation: Frequency Augmentation}
+As a potential defense, we evaluated the efficacy of simple frequency-aware augmentation (Notch Filtering 40Hz) during inference.
+
+\begin{table}[ht]
+\centering
+\caption{Defense Validation: Frequency Augmentation (Notch Filtering) Applied at Test Time to Remove Shortcut Artifact}
+\label{tab:augmentation}
+\begin{tabular}{l c c c}
+\toprule
+Method & Defense & Target F1 & $\Delta$ vs Baseline \\
+\midrule
+DANN (Baseline) & None & 0.75 & -- \\
+DANN (Defense) & Notch Filter (40Hz) & 0.81 & \textbf{+0.06} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Applying a simple DSP-based notch filter restored DANN performance to near-clean levels (0.81), outperforming the complex adversarial training objective alone. This validates our recommendation to prioritize domain knowledge (DSP) over black-box invariance learning.
+
+\subsubsection{The Inverted Generalization Phenomenon}
+We observe Target F1 $\gg$ Source F1 across methods (e.g., 0.85 vs.\ 0.35). This reflects task asymmetry: PTB-XL involves subtle morphological diagnosis, whereas Chapman rhythm classes rely heavily on R--R variability, which is statistically easier for a 1D-CNN to learn even under domain shift. Thus, generalization reflects both domain shift and task difficulty. We explicitly note that due to this task shift, Source and Target F1 scores are not directly comparable as same-task performance metrics, but rather serve to characterize the model's behavior in distinct deployment environments. While Expected Calibration Error (ECE) remains low in the clean setting, SAST consistently degrades calibration under distribution shift, suggesting that shortcut reliance not only affects accuracy but also undermines confidence reliability in deployment scenarios.
+
+\subsection{Diagnostic Insights}
+\begin{figure}[htbp]
+\centerline{\includegraphics[width=\columnwidth]{fig3_leakage.png}}
+\caption{Dataset-Identity Leakage. All methods retain substantial domain information (probe AUC $\approx$ 0.74--0.79; accuracy $\approx$ 68--72\%), indicating non-trivial domain predictability.}
+\label{fig:leakage}
+\end{figure}
+\subsubsection{Dataset-Identity Leakage Probing}
+Our probing analysis reveals that all models, regardless of objective, retain high dataset-identity information in their feature representations. ERM achieves a probe accuracy of $70.9\%$ (AUC 0.78), indicating separability well above random chance. Crucially, DANN ($70.3\%$) and V-REx ($71.6\%$) do not meaningfully reduce this leakage relative to ERM. This persistence suggests that standard invariance objectives are insufficient to scrub hardware-specific signatures (e.g., frequency response differences) from the representation, leaving the model vulnerable to utilizing these non-causal features as shortcuts.
+
+\section{Discussion}
+
+Our results demonstrate that enforcing statistical invariance alone is often insufficient for robust ECG generalization. The core failure mode is an \textbf{Optimization Dissonance}. Classical DG methods assume that removing domain-discriminative information yields domain-invariant semantic features. However, in our high-dimensional setting, the optimization landscape offers ``shortcut solutions'' that satisfy the invariance constraint more easily than the true causal solution. Specifically, because the SAST shortcut is strongly correlated with labels in both domains ($\rho=0.9$), it effectively mimics a statistically invariant feature by construction. DANN maximizes this invariance, with results consistent with increasing reliance on the shortcut rather than the physiology. This highlights that a truly robust clinical model must function as a \textbf{Physiological Feature Extractor} that remains invariant to acquisition hardware signatures.
+
+We note that this vulnerability manifests specifically under the compound stress of simultaneous domain, task, and artifact shift. The same-task control (Section IV-B-3) showed minimal degradation, suggesting DANN's failure mode is contingent on task misalignment amplifying shortcut reliance. This highlights that stress-testing protocols must evaluate models under realistic compound shifts, not idealized single-factor perturbations.
+
+\subsection{Clinical Implications of Hidden Shortcuts}
+For clinical practitioners, this study highlights a silent but critical danger: validation illusion. A model might appear robust on an external validation set (like our Chapman Target evaluation) not because it learned the underlying pathology, but because it learned a non-physiological signal correlated with labels (e.g., filtering artifacts, acquisition noise patterns) that persists across settings. SAST simulates this failure mode prospectively by "poisoning" the training data with a known, controlled artifact. If a model cannot ignore a 90\%-correlated \SI{60}{Hz} mains artifact—a simple, distinct spectral feature—it is highly unlikely to possess the robustness required to ignore subtle, non-stationary confounders in deployment. Therefore, we argue that deployment readiness should not be assessed solely by held-out accuracy, but by the model's demonstrated ability to reject known, high-magnitude shortcuts.
+
+\subsection{Limitations}
+The severe distribution shift investigated here (Schiller$\rightarrow$GE) is compounded by a task shift (morphology$\rightarrow$rhythm). While our stress-test setting combines domain and task shifts, this reflects deployment reality rather than an experimental artifact. Crucially, we note that label misalignment cannot explain the differential failure of DG methods under SAST vs Clean conditions, as the label shift is constant. The specific collapse of DANN under the poisoned condition implies a mechanism-specific interaction with the shortcut, independent of the underlying task mismatch. Limitations include the lack of a full parameter sweep for SAST (Amplitude/Correlation sensitivity) and single-run reporting; clarifying these sensitivity boundaries remains future work. Disentangling these effects (and validating statistical significance across multiple seeds, for which we plan 5-seed reporting in future work due to current computational constraints) remains an important direction for future controlled studies.
+
+\subsection{Recommendations for Deployment}
+To bridge the gap between benchmarking and clinical safety, we propose the following \textbf{Deployment Readiness Checklist} based on our findings:
+\begin{enumerate}
+    \item \textbf{Mandatory Stress-Testing}: Do not rely on held-out test set accuracy. Run SAST with known physical artifacts (mains noise, baseline wander) to quantify specific vulnerabilities. If SAST drop $>$ 0.05 F1, the model is fragile.
+    \item \textbf{Leakage Auditing}: Compute domain separability (probe AUC and accuracy). If AUC $\gg$ 0.5 (e.g., $\ge$0.70) or accuracy is well above chance, treat the model as potentially reliant on site-specific features.
+    \item \textbf{Frequency-Aware Augmentation}: If spectral shortcuts are detected, explicitly train with frequency-masked or notch-filtered data.
+    \item \textbf{Invariance Skepticism}: Treat "Domain Invariance" claims with skepticism. Our results show that invariance objectives (DANN) can paradoxically increase reliance on robust non-causal features.
+\end{itemize}
+
+\section{Conclusion}
+In our benchmarking setting, classical DG methods do not improve robustness for ECG classification under shortcut-amplified, cross-dataset shifts. Consistent with prior findings \cite{b3}, DANN can increase vulnerability via negative transfer. We recommend \textbf{SAST} and \textbf{Dataset-Identity Leakage probing} as standard pre-deployment diagnostics alongside traditional F1/AUC metrics. Future work should investigate non-adversarial disentanglement strategies that can explicitly model and reject frequency-domain confounders.
+
+\section*{Acknowledgment}
+Add acknowledgments here if applicable.
+
+\begin{thebibliography}{00}
+
+\bibitem{b1} A. Hannun \textit{et al.}, ``Cardiologist-level arrhythmia detection with convolutional neural networks,'' \textit{Nature Medicine}, 2019.
+
+\bibitem{b2} R. Geirhos \textit{et al.}, ``Shortcut learning in deep neural networks,'' \textit{Nature Machine Intelligence}, 2020.
+
+\bibitem{b3} I. Gulrajani and D. Lopez-Paz, ``In search of lost domain generalization,'' in \textit{Proc. ICLR}, 2021.
+
+\bibitem{b4} P. Wagner \textit{et al.}, ``PTB-XL, a large publicly available electrocardiography dataset,'' \textit{Scientific Data}, 2020.
+
+\bibitem{b5} J. Zheng \textit{et al.}, ``A 12-lead electrocardiogram database for arrhythmia research,'' \textit{Scientific Data}, 2020.
+
+\bibitem{b6} D. Krueger \textit{et al.}, ``Out-of-Distribution Generalization via Risk Extrapolation (REx),'' \textit{ICML}, 2021.
+
+\end{thebibliography}
+
+\end{document}

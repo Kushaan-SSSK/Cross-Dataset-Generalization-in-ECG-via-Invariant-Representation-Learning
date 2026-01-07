@@ -39,17 +39,34 @@ class ECGDataset(Dataset):
         return len(self.manifest_df)
         
     def _add_shortcut(self, signal):
-        """Add 60Hz sinusoidal noise."""
+        """Add specified artifact noise (Mains, BW, EMG)."""
         if self.shortcut_cfg is None: return signal
         
-        freq = self.shortcut_cfg.freq
+        sType = getattr(self.shortcut_cfg, 'type', 'mains')
         amp = self.shortcut_cfg.amplitude
-        fs = 100 # Assumed from preprocessing config
-        
+        fs = 100 # Assumed
         t = np.arange(signal.shape[0]) / fs
-        noise = amp * np.sin(2 * np.pi * freq * t)
         
-        # Add to Lead I (Index 0)
+        noise = np.zeros_like(t)
+        
+        if sType == 'mains':
+            freq = getattr(self.shortcut_cfg, 'freq', 60)
+            noise = amp * np.sin(2 * np.pi * freq * t)
+            
+        elif sType == 'bw': # Baseline Wander
+            # Low freq sinusoid (0.5Hz) + Linear drift
+            noise = amp * np.sin(2 * np.pi * 0.5 * t) + (amp * 0.5 * t)
+            
+        elif sType == 'emg': # Electromyographic (Muscle) Noise
+            # High freq Gaussian noise burst
+            # Burst covers random 50% of the signal
+            rng = np.random.default_rng(seed=int(signal[0,0]*1000)) 
+            mask = rng.random(len(t)) > 0.5
+            raw_noise = rng.normal(0, 1, len(t))
+            # EMG has high freq content
+            noise = amp * raw_noise * mask
+            
+        # Add to Lead I (index 0)
         signal[:, 0] += noise
         return signal
 
@@ -80,7 +97,9 @@ class ECGDataset(Dataset):
             # TEST/VAL: Clean (0% injection) to measure reliance drop
             
             inject = False
-            if self.split == 'train':
+            if getattr(self.shortcut_cfg, 'force', False):
+                inject = True
+            elif self.split == 'train':
                 p_corr = self.shortcut_cfg.correlation
                 
                 # Check target label (Assuming Binary: 0=Normal, >0=Abnormal for simplicity of this benchmark)
@@ -101,9 +120,33 @@ class ECGDataset(Dataset):
             if inject:
                 signal = self._add_shortcut(signal)
 
-        # Signal shape: (L, C) -> Transpose to (C, L) for PyTorch Conv1d
+        # shape (C, L)
         if signal.shape[0] > signal.shape[1]: 
              signal = signal.transpose(1, 0)
+        
+        # --- Notch Filter (Frequency Augmentation) ---
+        if getattr(self.shortcut_cfg, 'apply_notch', False):
+            # Apply 60Hz (source) and 40Hz (alias) notch? 
+            # Paper says 40Hz alias is the problem.
+            # Let's filter 40Hz.
+            from scipy.signal import iirnotch, dlsim
+            fs = 100.0
+            f0 = 40.0 # Frequency to remove
+            Q = 30.0  # Quality factor
+            b, a = iirnotch(f0, Q, fs)
+            
+            # Apply to all channels
+            # signal is (C, L) numpy array here? No, earlier valid was numpy.
+            # _add_shortcut returns numpy.
+            filtered = []
+            for ch in range(signal.shape[0]):
+                # signal[ch] is 1D array
+                # dlsim or lfilter. lfilter is standard.
+                from scipy.signal import lfilter
+                # simple filter
+                y_f = lfilter(b, a, signal[ch])
+                filtered.append(y_f)
+            signal = np.array(filtered)
         
         # Convert to tensor
         signal_tensor = torch.tensor(signal, dtype=torch.float32)

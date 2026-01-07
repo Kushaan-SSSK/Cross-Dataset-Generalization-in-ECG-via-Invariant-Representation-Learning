@@ -328,7 +328,18 @@ def compute_dataset_leakage(model, loader, device):
     clf = LogisticRegression(max_iter=200, solver='liblinear')
     clf.fit(X, y)
     acc = clf.score(X, y)
-    return acc
+    
+    # Calculate AUC (handle binary or multiclass)
+    from sklearn.metrics import roc_auc_score
+    if len(np.unique(y)) == 2:
+        y_probs = clf.predict_proba(X)[:, 1]
+        auc = roc_auc_score(y, y_probs)
+    else:
+        y_probs = clf.predict_proba(X)
+        auc = roc_auc_score(y, y_probs, multi_class='ovr')
+
+    log.info(f"Leakage: Acc={acc:.4f}, AUC={auc:.4f}")
+    return acc # Return acc for compatibility, or tuple if callers update
 
 def compute_frequency_attribution(model, loader, device, target_band=(58, 62), fs=100):
     """

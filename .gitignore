@@ -62,3 +62,8 @@ scripts/generate_results.py.broken.*
 
 # local script backups
 scripts/*.bak.*
+
+# Datasets (Explicit Exclusions)
+ptb-xl-a-large-publicly-available-electrocardiography-dataset*
+mit-bih-arrhythmia-database*
+a-large-scale-12-lead-electrocardiogram-database*
