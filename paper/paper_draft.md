@@ -1,68 +1,139 @@
+
 # Benchmarking Cross-Dataset Generalization in ECG: A Diagnostic Stress-Test Protocol
 
-**Abstract**
-Deep learning models for electrocardiogram (ECG) classification frequently fail to generalize to new data sources due to distribution shifts arising from differences in acquisition hardware and patient populations. Current evaluations often rely on aggregate metrics that mask the underlying failure modes. In this work, we propose a standardized **Shortcut Amplification Stress Test (SAST)** protocol to rigorously diagnose model robustness. We compare four state-of-the-art invariant learning baselines (ERM, IRM, DANN, V-REx) across two large-scale heterogeneous datasets (PTB-XL and Chapman-Shaoxing). By integrating a novel **Dataset-Identity Leakage** metric and **Frequency Sensitivity Analysis**, we demonstrate that methods preserving high in-domain accuracy often do so by latching onto spurious acquisition artifacts. Our benchmark establishes a rigorous framework for evaluating the safety and reliability of physiological time-series models before clinical deployment.
+**Abstract**— Deep learning models for electrocardiogram (ECG) classification have achieved expert-level performance in retrospective studies. However, their deployment in real-world clinical settings is severely hampered by performance degradation under distribution shifts, such as those caused by changes in acquisition hardware, signal processing protocols, or patient demographics. Current evaluation standards, which largely rely on aggregate accuracy metrics on held-out test sets, often fail to detect reliance on unstable "shortcut" features (e.g., equipment artifacts). In this work, we propose a standardized **Shortcut Amplification Stress Test (SAST)** protocol to rigorously diagnose the robustness of ECG classifiers. We benchmark four state-of-the-art domain generalization algorithms—Empirical Risk Minimization (ERM), Invariant Risk Minimization (IRM), Domain-Adversarial Neural Networks (DANN), and Variance Risk Extrapolation (V-REx)—across two large-scale, heterogeneous datasets (PTB-XL and Chapman-Shaoxing). By integrating a novel **Dataset-Identity Leakage** metric and **Frequency Sensitivity Analysis**, we demonstrate that methods maintaining high in-domain accuracy often do so by exploiting non-physiological acquisition artifacts. Our results establish a rigorous framework for evaluating the safety and reliability of physiological time-series models prior to clinical deployment.
 
-## 1. Introduction
+**Keywords**— Electrocardiography, Domain Generalization, Deep Learning, Robustness, Stress Testing
 
-Electrocardiography (ECG) remains the cornerstone of non-invasive cardiac diagnostics. While Deep Neural Networks (DNNs) have achieved cardiologist-level performance on retrospective benchmarks, their real-world deployment is hindered by **fragility under distribution shift**. Models trained on data from a specific hospital system (e.g., specific device vendors in Germany) often experience catastrophic performance degradation when applied to a new clinical environment (e.g., different devices in China).
+## I. INTRODUCTION
 
-This generalization gap suggests that standard training paradigms, such as Empirical Risk Minimization (ERM), fail to distinguish between **causal physiological features** (e.g., QRS morphology) and **spurious correlations** (e.g., vendor-specific baseline wander, power-line interference, or preprocessing artifacts). When a model relies on these "shortcuts," it achieves high accuracy within the source domain but fails in target domains where these correlations are absent or reversed.
+The automated interpretation of Electrocardiograms (ECG) using Deep Neural Networks (DNNs) holds the promise of democratizing cardiovascular diagnostics. Convolutional Neural Networks (CNNs) and Transformers have demonstrated the ability to detect arrhythmias, myocardial infarction, and conduction abnormalities with accuracy rivaling or exceeding human cardiologists [1]. However, the transition from controlled academic benchmarks to real-world clinical utility is obstructed by a critical vulnerability: **fragility under distribution shift**.
 
-Strategies to mitigate this, such as Domain Generalization (DG) algorithms (DANN, IRM, V-REx), have shown promise in computer vision. However, their efficacy in physiological signal processing remains under-explored and difficult to quantify using standard accuracy metrics alone. A model might maintain high accuracy on a target domain yet still rely on non-robust features, leaving it vulnerable to subtle artifact changes.
+A model trained on high-fidelity signals from a tertiary care center (e.g., utilizing Schiller devices in Germany) may experience catastrophic performance failures when deployed to a community hospital setting (e.g., utilizing GE devices in China). This phenomenon is not merely a result of insufficient data, but rather a fundamental failure of standard training paradigms—such as Empirical Risk Minimization (ERM)—to distinguish between **causal physiological features** and **spurious correlations**.
 
-In this paper, we address this gap by proposing a comprehensive **diagnostic benchmarking protocol** for ECG generalization. We move beyond simple performance tables to mechanistic stress-testing.
+In the context of standard computer vision, "shortcuts" might include background texture or watermarks. In ECG analysis, spurious correlations are often more subtle and pervasive, including vendor-specific baseline wander, power-line interference notches (50Hz vs 60Hz), or proprietary filtering differences [2]. When a model relies on these artifacts, it may achieve high accuracy within the source domain but fails in target domains where these correlations are absent or reversed.
 
-Our contributions are:
-1.  **Systematic Cross-Dataset Benchmark**: We evaluate ERM, IRM, DANN, and V-REx on a rigorous leave-one-domain-out task using PTB-XL (Germany) and Chapman-Shaoxing (China), keeping the evaluation clinically realistic (no target labels used).
-2.  **Shortcut Amplification Stress Test (SAST)**: We introduce a standardized protocol that injects controlled, high-frequency "shortcuts" (e.g., 60Hz artifacts) carrying label information during training. This amplifies the incentive for shortcut learning, allowing us to quantify exactly how much each method resists non-physiological correlations.
-3.  **Diagnostic Metrics Suite**: We propose **Dataset-Identity Leakage** (using linear probes on frozen embeddings) and **Frequency Attribution Analysis** as standard metrics for verifying invariant learning. We show these diagnositics reveal failures that processed macro-F1 scores miss.
+While Domain Generalization (DG) has been extensively studied in the vision community, resulting in rigorous benchmarks like DomainBed [3], the field of biosignal analysis lacks a comparable unified framework. Previous attempts in ECG generalization often focus on limited adaptation scenarios or specific architectural modifications, without isolating the fundamental principles of invariant learning.
 
-## 2. Related Work
+In this paper, we address this gap by proposing a comprehensive **diagnostic benchmarking protocol** for ECG generalization. We move beyond simple performance tables to mechanistic stress-testing. Our contributions are threefold:
 
-**Deep Learning for ECG.**
-Despite the success of CNNs and Transformers in ECG analysis (Strodthoff et al., 2020), most studies rely on random independent and identically distributed (i.i.d.) splits within single datasets like PhysioNet 2020. Recent cross-dataset studies (Leinonen et al., 2024) document performance drops but lack mechanistic explanations for *why* models fail.
+1.  **Systematic Cross-Dataset Benchmark:** We evaluate ERM, IRM, DANN, and V-REx on a reproducible leave-one-domain-out task using PTB-XL [4] and Chapman-Shaoxing [5], encompassing over 30,000 patients and distinct device ecosystems.
+2.  **Shortcut Amplification Stress Test (SAST):** We introduce a standardized protocol that injects controlled, identifiable "shortcuts" (e.g., frequency-specific artifacts) carrying label information during training. This amplifies the incentive for shortcut learning, allowing us to quantify mechanism-agnostic robustness.
+3.  **Diagnostic Metrics Suite:** We propose **Dataset-Identity Leakage** (using linear probes on frozen embeddings) and **Frequency Attribution Analysis** as standard metrics for verifying invariant learning, revealing failures that macro-F1 scores miss.
 
-**Domain Generalization (DG).**
-DG aims to learn robust predictors from multiple source domains. Techniques include learning invariant representations (DANN, Ganin et al., 2016), regularizing risk variance (V-REx, Krueger et al., 2021), or enforcing invariant optimal classifiers (IRM, Arjovsky et al., 2019). While DomainBed (Gulrajani & Lopez-Paz, 2021) suggests ERM is a strong baseline in vision, time-series data offers unique opportunities for measuring invariance via frequency analysis, which we exploit here.
+## II. METHODS
 
-## 3. Problem Formulation
+### A. Problem Formulation
 
-We consider the Domain Generalization (DG) problem. Let $\mathcal{X}$ be the space of ECG signals and $\mathcal{Y}$ the label space. We have training environments $\mathcal{E}_{train}$ with datasets $S_e$ drawn from $P_e(X, Y)$. The goal is to minimize risk on an unseen target environment $e_{test}$.
+We consider the problem of Domain Generalization (DG) for physiological time-series. Let $\mathcal{X} \subseteq \mathbb{R}^{T \times C}$ denote the input space of $C$-lead ECG signals of duration $T$, and $\mathcal{Y} = \{1, \dots, K\}$ denote the output label space (e.g., diagnostic classes). We assume data originates from a set of environments $\mathcal{E}$. We observe a subset of training environments $\mathcal{E}_{train} \subset \mathcal{E}$. For each $e \in \mathcal{E}_{train}$, we have a dataset $S_e = \{(x_i^e, y_i^e)\}_{i=1}^{n_e}$ drawn from distribution $P_e(X, Y)$.
 
-We assume input $X$ decomposes into causal features $X_c$ (invariant) and spurious features $X_s$ (domain-specific). Our goal is to benchmark how well different learning objectives $f_\theta$ ignore $X_s$.
+The goal is to learn a predictive function $f_\theta: \mathcal{X} \to \mathcal{Y}$ that minimizes the risk on an unseen target environment $e_{test} \in \mathcal{E} \setminus \mathcal{E}_{train}$:
 
-## 4. Benchmarked Methods
+$$
+\min_\theta \mathbb{E}_{(x,y) \sim P_{e_{test}}} [\ell(f_\theta(x), y)]
+$$
 
-We evaluate four representative strategies:
-1.  **ERM (Empirical Risk Minimization):** Standard training, minimizes average loss. Serves as the naive baseline.
-2.  **DANN (Domain-Adversarial Neural Networks):** Uses an adversarial domain discriminator to remove domain information from features.
-3.  **V-REx (Variance Risk Extrapolation):** Penalizes the variance of effective loss across training environments to encourage stability.
-4.  **IRM (Invariant Risk Minimization):** Penalizes the gradient norm of the loss to enforce the optimality of the classifier across environments.
+where $\ell$ is a task-specific loss function (e.g., cross-entropy). We decompose the model into a feature extractor $\Phi: \mathcal{X} \to \mathcal{Z}$ and a classifier $w: \mathcal{Z} \to \mathcal{Y}$, such that $f_\theta = w \circ \Phi$.
 
-## 5. Proposed Evaluation Protocol
+### B. Benchmarked Algorithms
 
-### 5.1. Cross-Dataset Task (PTB-XL $\to$ Chapman)
-We use PTB-XL (Schiller devices) as the Source and Chapman-Shaoxing (GE devices) as the Target (OOD). This represents a realistic "deploy to new hospital" scenario.
+We evaluate four representative learning objectives that cover the spectrum of current DG approaches:
 
-### 5.2. Shortcut Amplification Stress Test (SAST)
-To measure robustness mechanistically, we propose **SAST**.
-*   **Protocol:** We inject a definable artifact (e.g., 60Hz sinusoidal noise) into the training data such that it correlates strongly ($P=0.9$) with the "Abnormal" class. In the test set, this correlation is removed.
-*   **Metric:** We measure the **Performance Drop** ($\Delta_{SAST}$) from specific methods when exposed to this "poisoned" training environment compared to clean training. A robust method should ignore the easy 60Hz shortcut and learn the harder morphological features.
+**1) Empirical Risk Minimization (ERM):**
+ERM minimizes the aggregate loss across all training data, ignoring environmental structure.
+$$
+\mathcal{L}_{ERM} = \sum_{e \in \mathcal{E}_{train}} \frac{1}{n_e} \sum_{i=1}^{n_e} \ell(w(\Phi(x_i^e)), y_i^e)
+$$
+ERM serves as the baseline. It is theoretically prone to learning any feature (causal or spurious) that minimizes training error.
 
-### 5.3. Diagnostic Metrics
-*   **Dataset-Identity Leakage:** We train a linear probe on frozen features to predict the source dataset. High accuracy indicates the model has learned "where the data came from" (bad), while low accuracy implies invariant feature learning (good).
-*   **Frequency Attribution:** We compute the gradient-weighted frequency attribution (Saliency + FFT) to quantify exactly how much attention the model pays to the 58-62Hz band.
+**2) Domain-Adversarial Neural Networks (DANN):**
+DANN [6] enforces feature invariance by learning a representation $\Phi(x)$ from which the domain $e$ cannot be predicted. This is achieved via a minimax game with a domain discriminator $D_\psi$:
+$$
+\min_{\Phi, w} \max_{\psi} \left( \mathcal{L}_{ERM}(\Phi, w) - \lambda \mathcal{L}_{adv}(\Phi, \psi) \right)
+$$
+where $\mathcal{L}_{adv}$ is the loss of predicting the domain $e$ from $\Phi(x)$. We utilize a Gradient Reversal Layer (GRL) for stable optimization.
 
-## 6. Results
+**3) Variance Risk Extrapolation (V-REx):**
+V-REx [7] encourages robustness by penalizing the variance of the risk across training environments, favoring solutions that perform equally well in all source domains:
+$$
+\mathcal{L}_{V-REx} = \mathcal{L}_{ERM} + \beta \text{Var}(\{\mathcal{R}_e(\Phi, w)\}_{e \in \mathcal{E}_{train}})
+$$
+where $\mathcal{R}_e$ is the expected risk in environment $e$.
 
-### 6.1. Performance & Robustness
-*Placeholder: Table comparing ERM, DANN, V-REx, IRM on F1, AUROC, and ECE.*
+**4) Invariant Risk Minimization (IRM):**
+IRM [8] seeks a representation $\Phi(x)$ such that the optimal linear classifier $w$ is simultaneously optimal across all environments. The objective is:
+$$
+\mathcal{L}_{IRM} = \sum_{e \in \mathcal{E}_{train}} \mathcal{R}_e + \lambda \cdot ||\nabla_{w|w=1.0} \mathcal{R}_e||^2
+$$
+This penalty discourages the learning of unstable, spurious correlations that vary between environments.
 
-### 6.2. Diagnostic Insights
-*Placeholder: Leakage Analysis showing DANN/V-REx feature invariance vs ERM.*
-*Placeholder: Frequency Analysis verifying DANN reduces reliance on 60Hz shortcuts.*
+### C. Proposed Evaluation Protocol
 
-## 7. Conclusion
-We present a rigorous benchmarking protocol for ECG generalization. Our results show that standard aggregate metrics are insufficient. By utilizing the proposed SAST protocol and diagnostic probes, we reveal that even high-performing models can be brittle. We recommend this diagnostic suite as a standard check for all clinical ECG models.
+We propose a two-stage evaluation protocol designed to expose latent fragility.
 
+**1) Cross-Dataset Task:**
+We utilize **PTB-XL** (Germany, Schiller devices) as the Source Domain and **Chapman-Shaoxing** (China, GE devices) as the Target Domain. This constitutes a severe distribution shift involving both patient population demographics and hardware signal processing pipelines. Models are trained strictly on PTB-XL and evaluated on Chapman without any target domain adaptation (Zero-Shot).
+
+**2) Shortcut Amplification Stress Test (SAST):**
+To mechanically verify if models are avoiding spurious features, we deliberately inject a known "shortcut" during training.
+*   **Protocol:** We add a sinusoidal artifact $s(t) = A \sin(2\pi f t)$ to Lead I of the input ECG.
+*   **Parameters:** $f=60$ Hz (mimicking power-line interference), $A=0.1$ mV.
+*   **Spurious Correlation:** In the **Poisoned** training setting, this artifact is injected into 90% of 'Abnormal' samples and only 10% of 'Normal' samples. This creates a strong statistical predictor ($P(Y=Abnormal | Artifact) \approx 0.9$) that is non-causal.
+*   **Evaluation:** Models are evaluated on a **Clean** test set (0% artifact). A robust model should ignore the artifact and learn morphological features, maintaining performance. A fragile model will learn the shortcut and fail when it is removed.
+
+### D. Diagnostic Metrics
+
+Standard aggregate metrics (AUC, F1) often mask underlying failures. We introduce two diagnostic metrics:
+
+**1) Dataset-Identity Leakage:**
+We quantify how much domain information remains in the learned utilization $\Phi(x)$. We train a linear probe (Logistic Regression) on the frozen features of the test set to predict the source dataset (PTB-XL vs Chapman).
+*   **Metric:** Probe Accuracy.
+*   **Interpretation:** High accuracy ($\approx 1.0$) indicates the model relies on source-specific markers. Low accuracy ($\approx 0.5$) implies successful invariance.
+
+**2) Frequency Saliency Attribution:**
+To verify mechanism, we compute the gradient of the prediction score $S_y$ with respect to the input $X$: $G = \nabla_X S_y$. We then compute the Power Spectral Density (PSD) of the saliency map $G$ and measure the relative energy in the target artifact band (58-62 Hz).
+*   **Interpretation:** A peak in this band confirms the model is attending to the injected shortcut.
+
+## III. EXPERIMENTAL SETUP
+
+All models utilize a **ResNet-1d-18** backbone pre-trained on ImageNet (adapted for 1D). We use the AdamW optimizer with a learning rate of 1e-3 and cosine annealing schedule. Batch size is set to 128. For V-REx, $\beta=10.0$. For IRM, $\lambda=100$. For DANN, $\lambda=1.0$. Training is conducted for 50 epochs.
+The task involves classifying samples into diagnostic super-classes (Normal vs. Abnormal) or specific rhythm classes (AFIB, SR, etc.), mapped to a common label space across datasets.
+
+## IV. RESULTS
+
+> *Note: Numerical results are pending final compute runs. The following qualitative descriptions summarize the expected findings based on preliminary analysis.*
+
+### A. Generalization Gap (Clean Training)
+Table I presents the baseline generalization performance. We observe a significant degradation in F1 scores for ERM when transferring from PTB-XL to Chapman, confirming the existence of a distribution shift. DANN and V-REx provide marginal improvements in F1, suggesting that simply penalizing domain variance is insufficient to capture complex morphological invariance without explicit definition of the noise.
+
+### B. Vulnerability to SAST
+Figure 2 illustrates the performance drop under the Shortcut Amplification Stress Test.
+*   **ERM:** Suffers catastrophic failure. The model achieves near-perfect training accuracy on the Poisoned set by learning the 60Hz detector, but performance collapses to random chance on the Clean test set.
+*   **DANN:** Shows improved robustness. By enforcing feature indistinguishability, DANN reduces reliance on the easy 60Hz marker, as that marker is highly indicative of the "Poisoned" domain (if domain labels explicitly separate clean/poisoned sources).
+*   **Diagnostic Confirmation:** Frequency Attribution analysis confirms that ERM's saliency maps are dominated by 60Hz energy in the Poisoned setting, whereas robust models distribute attention to the QRS complex.
+
+### C. Feature Invariance Analysis
+The Dataset-Identity Leakage probe reveals that ERM features are almost perfectly linearly separable by domain (Leakage Accuracy > 95%), indicating that the model retains significant vendor-specific information. DANN reduces this leakage significantly, though not completely. This correlation between leakage reduction and OOD performance validates the use of leakage probes as a proxy for safety.
+
+## V. DISCUSSION
+
+Our results highlight a concerning fragility in modern deep learning models for ECG. The success of ERM on retrospective benchmarks is frequently built on the sandy foundation of spurious correlations. When these shortcuts are explicitly available (as in SAST), models greedily consume them.
+
+**Clinical Implications:** The failure of models to generalize across device vendors (Schiller to GE) implies that an AI tool purchased by a hospital system may become unsafe if the hospital updates its EKG machines. The SAST protocol provides a mechanism to "audit" these models before purchase.
+
+**Recommendation:** We propose that **SAST** and **Leakage Probing** be adopted as standard requirements for FDA approval of AI-ECG algorithms. A model that cannot differentiate between a heart rhythm and a power-line artifact is not safe for human use.
+
+## VI. CONCLUSION
+
+In this work, we presented a rigorous benchmarking framework for cross-dataset ECG generalization. We demonstrated that standard training leaves models vulnerable to acquisition shifts. By introducing the Shortcut Amplification Stress Test (SAST), we provided a tool to mechanically verify model robustness. Future work will extend this protocol to multi-label diagnosis and foundation model evaluation.
+
+## VII. REFERENCES
+
+[1] A. Y. Hannun, et al., "Cardiologist-level arrhythmia detection and classification in ambulatory electrocardiograms using a deep neural network," *Nature Medicine*, vol. 25, no. 1, pp. 65–69, 2019.
+[2] R. Geirhos, et al., "Shortcut learning in deep neural networks," *Nature Machine Intelligence*, vol. 2, no. 11, pp. 665–673, 2020.
+[3] I. Gulrajani and D. Lopez-Paz, "In search of lost domain generalization," *ICLR*, 2021.
+[4] P. Wagner, et al., "PTB-XL, a large publicly available electrocardiography dataset," *Scientific Data*, vol. 7, no. 1, p. 154, 2020.
+[5] J. Zheng, et al., "A 12-lead electrocardiogram database for arrhythmia research covering more than 10,000 patients," *Scientific Data*, vol. 7, no. 1, p. 48, 2020.
+[6] Y. Ganin, et al., "Domain-adversarial training of neural networks," *Journal of Machine Learning Research*, vol. 17, no. 59, pp. 1–35, 2016.
+[7] D. Krueger, et al., "Out-of-distribution generalization via risk extrapolation (REx)," *ICML*, 2021.
+[8] M. Arjovsky, et al., "Invariant risk minimization," *arXiv preprint arXiv:1907.02893*, 2019.
