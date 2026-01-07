@@ -516,7 +516,9 @@ def main(cfg: DictConfig):
             })
             
             # 3. Frequency Attribution (Poisoned Checks)
-            freq_score = compute_frequency_attribution(model, loader, device)
+            # Use data sampling rate (default 250 in later runs, 100 in early)
+            fs = cfg.data.get("sampling_rate", 100)
+            freq_score = compute_frequency_attribution(model, loader, device, fs=fs)
             all_metrics.append({
                 "Method": pretty_names[method_key],
                 "Condition": condition,
