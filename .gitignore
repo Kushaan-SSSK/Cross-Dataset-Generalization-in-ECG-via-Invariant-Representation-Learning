@@ -48,4 +48,14 @@ scripts/generate_results.py.bak.*
 scripts/generate_results.py.broken.*
 
 # ---- generated results ----
-results/
+
+# ---- local patch/repair scripts ----
+*_FIX_*.sh
+patch_*.sh
+repair_*.sh
+fix_*.sh
+add_import_*.sh
+
+# ---- local backups / broken copies ----
+scripts/generate_results.py.bak.*
+scripts/generate_results.py.broken.*
