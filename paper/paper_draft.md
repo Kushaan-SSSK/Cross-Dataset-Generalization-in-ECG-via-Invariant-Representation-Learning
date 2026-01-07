@@ -108,20 +108,24 @@ Table I presents the baseline generalization performance. We observe a significa
 
 ### B. Vulnerability to SAST
 Figure 2 illustrates the performance drop under the Shortcut Amplification Stress Test.
-*   **ERM:** Suffers catastrophic failure. The model achieves near-perfect training accuracy on the Poisoned set by learning the 60Hz detector, but performance collapses to random chance on the Clean test set.
-*   **DANN:** Shows improved robustness. By enforcing feature indistinguishability, DANN reduces reliance on the easy 60Hz marker, as that marker is highly indicative of the "Poisoned" domain (if domain labels explicitly separate clean/poisoned sources).
-*   **Diagnostic Confirmation:** Frequency Attribution analysis confirms that ERM's saliency maps are dominated by 60Hz energy in the Poisoned setting, whereas robust models distribute attention to the QRS complex.
+*   **ERM:** Maintained high F1 (0.847 Clean $\to$ 0.831 Poisoned), but this surface-level robustness is deceptive. As shown below, it relies heavily on source-specific features.
+*   **DANN:** Exhibited the most significant sensitivity to the shortcut, with F1 dropping from **0.843 (Clean)** to **0.755 (Poisoned)**. This 10\% drop highlights that adversarial invariance alone is insufficient when strongly correlated shortcuts ($P=0.9$) are present.
+*   **V-REx:** Remained stable (0.806 $\to$ 0.817), suggesting its variance penalty successfully ignored the specific 60Hz perturbation, though it failed to improve overall generalization compared to ERM.
 
 ### C. Feature Invariance Analysis
-The Dataset-Identity Leakage probe reveals that ERM features are almost perfectly linearly separable by domain (Leakage Accuracy > 95%), indicating that the model retains significant vendor-specific information. DANN reduces this leakage significantly, though not completely. This correlation between leakage reduction and OOD performance validates the use of leakage probes as a proxy for safety.
+The Dataset-Identity Leakage probe reveals that **all benchmarked methods failed to learn truly invariant representations**.
+*   **Leakage Accuracy:** ERM (99.8\%), DANN (99.9\%), and V-REx (99.9\%) all produced embeddings that were nearly perfectly linearly separable by domain.
+*   **Implication:** Despite DANN's explicit adversarial objective, it could not remove dataset-identity information. This strongly motivates the need for our proposed SAST protocol to expose these invisible failures that macro-F1 hides.
 
 ## V. DISCUSSION
 
-Our results highlight a concerning fragility in modern deep learning models for ECG. The success of ERM on retrospective benchmarks is frequently built on the sandy foundation of spurious correlations. When these shortcuts are explicitly available (as in SAST), models greedily consume them.
+Our results highlight a concerning fragility in modern deep learning models for ECG. The success of ERM on retrospective benchmarks is frequently built on the sandy foundation of spurious correlations. When these shortcuts are explicitly available (as in SAST), models like DANN can paradoxically become *more* vulnerable by over-aligning distributions in a way that latches onto the artifact.
+
+**Backbone Considerations:** We utilized a ResNet-1d-18 pre-trained on ImageNet. While transfer learning from 2D images to 1D signals introduces a domain mismatch, prior work [1] has demonstrated its empirical utility in stabilizing convergence for small-sample ECG tasks. Future work should explore self-supervised pre-training on large-scale ECG cohorts to isolate architecture-specific biases.
 
 **Clinical Implications:** The failure of models to generalize across device vendors (Schiller to GE) implies that an AI tool purchased by a hospital system may become unsafe if the hospital updates its EKG machines. The SAST protocol provides a mechanism to "audit" these models before purchase.
 
-**Recommendation:** We propose that **SAST** and **Leakage Probing** be adopted as standard requirements for FDA approval of AI-ECG algorithms. A model that cannot differentiate between a heart rhythm and a power-line artifact is not safe for human use.
+**Recommendation:** We argue that **SAST** and **Leakage Probing** could serve as valuable components of a rigorous pre-deployment audit for clinical AI algorithms. A model that cannot differentiate between a heart rhythm and a power-line artifact presents a latent safety risk.
 
 ## VI. CONCLUSION
 
