@@ -489,12 +489,19 @@ def main(cfg: DictConfig):
                     calibration_data[(method_key, condition)] = (ece, bin_stats)
                     all_metrics[-1]["ECE"] = ece
                     
-                    # PR Curve
+                    # PR Curve (Binary or One-vs-Rest for Abnormal)
                     if cfg.model.num_classes == 2:
-                        prec, rec, _ = precision_recall_curve(y_true, y_prob[:, 1])
-                        pr_auc = auc(rec, prec)
-                        pr_data[(method_key, condition)] = (prec, rec, pr_auc)
-                        all_metrics[-1]["AUPRC"] = pr_auc
+                        y_true_bin = y_true
+                        y_score_bin = y_prob[:, 1]
+                    else:
+                        # Assume Class 0 is Normal, others Abnormal (Superdiagnostic)
+                        y_true_bin = (y_true != 0).astype(int)
+                        y_score_bin = 1.0 - y_prob[:, 0]
+
+                    prec, rec, _ = precision_recall_curve(y_true_bin, y_score_bin)
+                    pr_auc = auc(rec, prec)
+                    pr_data[(method_key, condition)] = (prec, rec, pr_auc)
+                    all_metrics[-1]["AUPRC"] = pr_auc
                     
                     # Confusion Matrix Data (Store for PID vs ERM)
                     if method_key in ["erm", "v2"]:
