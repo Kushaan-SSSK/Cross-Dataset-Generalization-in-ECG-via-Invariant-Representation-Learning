@@ -71,7 +71,12 @@ class ResNet1d(nn.Module):
 
         return nn.Sequential(*layers)
 
-    def forward(self, x):
+    def forward(self, x, return_feats=False):
+        """
+        Args:
+            x: Input tensor (B, C, L)
+            return_feats: If True, returns (logits, features) tuple.
+        """
         # x: (B, C, L)
         x = self.conv1(x)
         x = self.bn1(x)
@@ -84,7 +89,9 @@ class ResNet1d(nn.Module):
         x = self.layer4(x)
 
         x = self.avgpool(x)
-        x = x.view(x.size(0), -1)
-        x = self.fc(x)
+        feats = x.view(x.size(0), -1)
+        out = self.fc(feats)
 
-        return x
+        if return_feats:
+            return out, feats
+        return out

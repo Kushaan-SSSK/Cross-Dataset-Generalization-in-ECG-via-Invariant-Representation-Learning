@@ -12,6 +12,8 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 try:
     from src.models.resnet1d import ResNet1d
+    import src.models.resnet1d
+    print(f"ResNet1d loaded from: {src.models.resnet1d.__file__}")
     from scripts.run_embc_fix import resolve_data_path
 except ImportError as e:
     print(f"Import Error: {e}")
