@@ -70,7 +70,11 @@ def main(cfg: DictConfig):
 
     # FILTER: Exclude MIT-BIH (2-lead, variable length) for Task A (12-lead)
     # This prevents RuntimeError: stack expects each tensor to be equal size
-    valid_sources = ['ptbxl', 'chapman']
+    valid_sources = cfg.data.get('train_sources', ['ptbxl', 'chapman'])
+    # Convert OmegaConf list to python list if needed
+    if not isinstance(valid_sources, list):
+         valid_sources = list(valid_sources)
+
     log.info(f"Filtering for sources: {valid_sources}")
     train_df = train_df[train_df['dataset_source'].isin(valid_sources)]
     val_df = val_df[val_df['dataset_source'].isin(valid_sources)]
@@ -166,10 +170,33 @@ def main(cfg: DictConfig):
         log.info(f"Epoch {epoch+1}: Train Loss: {avg_train_loss:.4f}, Train Acc: {avg_train_acc:.4f} | Val Loss: {avg_val_loss:.4f}, Val Acc: {metrics['val_acc']:.4f}, Val F1: {metrics['val_f1']:.4f}")
         
         # Save Best
-        if metrics['val_f1'] > best_val_f1:
+        # Save Best
+        if metrics['val_f1'] > best_val_f1 or epoch == 0:
             best_val_f1 = metrics['val_f1']
-            torch.save(method.state_dict(), "best_model.pt")
-            log.info("New Best Model Saved!")
+            
+            if hasattr(cfg, 'save_path'):
+                 save_dir = cfg.save_path
+            else:
+                try:
+                    save_dir = HydraConfig.get().run.dir
+                except Exception:
+                    save_dir = os.getcwd()
+                
+            save_path = os.path.join(save_dir, "best_model.pt")
+            log.info(f"DEBUG: Saving best_model.pt to {save_path}")
+            torch.save(method.state_dict(), save_path)
+            log.info(f"DEBUG: File exists after save? {os.path.exists(save_path)}")
+            log.info(f"New Best Model Saved! (F1: {best_val_f1:.4f})")
+
+    # Save Last
+    if hasattr(cfg, 'save_path'):
+         save_dir = cfg.save_path
+    else:
+        try:
+            save_dir = HydraConfig.get().run.dir
+        except Exception:
+            save_dir = os.getcwd()
+    torch.save(method.state_dict(), os.path.join(save_dir, "last_model.pt"))
 
 if __name__ == "__main__":
     main()
