@@ -1,6 +1,7 @@
 
 import os
 import sys
+from pathlib import Path
 import torch
 import torch.nn.functional as F
 import numpy as np
@@ -44,6 +45,20 @@ SUMMARY_FILE = os.path.join(BASE_OUT_DIR, "embc_fix_summary.csv")
 
 
     # --- Helper Functions (Copied/Adapted) ---
+    
+def resolve_data_path(primary: str, fallback: str) -> str:
+    primary_p = Path(primary)
+    if primary_p.exists():
+        return str(primary_p)
+    fallback_p = Path(fallback)
+    if fallback_p.exists():
+        print(f"[run_embc_fix] Warning: {primary} not found; using {fallback}")
+        return str(fallback_p)
+    # If neither exists, raise a clear error with both paths listed
+    raise FileNotFoundError(
+        f"Could not find required file. Tried: {primary} and {fallback}. "
+        f"Please place the file in one of these locations."
+    )
 
 def compute_ece(logits, labels, n_bins=10):
     """Calculates Expected Calibration Error."""
@@ -248,8 +263,18 @@ def main():
     # Processed Path (Shared)
     PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
     PROCESSED_PATH = os.path.join(PROJECT_ROOT, "data", "processed", "signals.h5")
-    MANIFEST_PATH = os.path.join(PROJECT_ROOT, "data", "manifests", "master_manifest.csv")
-    SPLIT_PATH = os.path.join(PROJECT_ROOT, "data", "manifests", "splits.json")
+    
+    MANIFEST_PATH = resolve_data_path(
+        primary=os.path.join(PROJECT_ROOT, "data", "manifests", "master_manifest.csv"),
+        fallback=os.path.join(PROJECT_ROOT, "data", "processed", "master_manifest.csv")
+    )
+    SPLIT_PATH = resolve_data_path(
+        primary=os.path.join(PROJECT_ROOT, "data", "manifests", "splits.json"),
+        fallback=os.path.join(PROJECT_ROOT, "data", "processed", "splits.json")
+    )
+    
+    log.info(f"Using Manifest Path: {MANIFEST_PATH}")
+    log.info(f"Using Split Path: {SPLIT_PATH}")
     
     import pandas as pd
     import json
