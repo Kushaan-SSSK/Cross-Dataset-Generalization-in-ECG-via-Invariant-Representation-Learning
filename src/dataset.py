@@ -5,6 +5,7 @@ import torch
 from torch.utils.data import Dataset
 import numpy as np
 
+from omegaconf import OmegaConf
 class ECGDataset(Dataset):
     """
     ECG Dataset reading from HDF5 processed file.
@@ -45,7 +46,7 @@ class ECGDataset(Dataset):
         if self.shortcut_cfg is None: return signal
         
         sType = getattr(self.shortcut_cfg, 'type', 'mains')
-        amp = self.shortcut_cfg.amplitude
+        amp = OmegaConf.select(self.shortcut_cfg, "amplitude", default=0.1)
         fs = 100 # Assumed
         t = np.arange(signal.shape[0]) / fs
         
