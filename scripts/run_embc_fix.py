@@ -212,7 +212,8 @@ def get_train_cmd(train_src, method, condition, seed, out_dir):
         f"hydra.run.dir={out_dir}",
         f"train.epochs={EPOCHS}",
         f"++data.train_sources=[{train_src}]",
-        f"++save_path={out_dir}"
+        f"++save_path={out_dir}",
+        "++model.num_classes=2"  # Enforce Binary Classification
     ]
     
     # Condition Logic
@@ -228,7 +229,7 @@ def get_train_cmd(train_src, method, condition, seed, out_dir):
         
     return cmd
 
-def load_method_model(method_name, ckpt_path, num_classes=7, device='cpu'):
+def load_method_model(method_name, ckpt_path, num_classes=2, device='cpu'):
     # Load state dict
     sd = torch.load(ckpt_path, map_location=device)
     
@@ -276,9 +277,6 @@ def main():
     log.info(f"Using Manifest Path: {MANIFEST_PATH}")
     log.info(f"Using Split Path: {SPLIT_PATH}")
     
-    import pandas as pd
-    import json
-    
     manifest_df = pd.read_csv(MANIFEST_PATH)
     with open(SPLIT_PATH, 'r') as f:
         splits = json.load(f)
@@ -293,7 +291,8 @@ def main():
         df = manifest_df[manifest_df['unique_id'].isin(all_ids)]
         df = df[df['dataset_source'] == source]
         
-        ds = ECGDataset(df, PROCESSED_PATH, task_label_col='task_a_label', shortcut_cfg=shortcut_cfg, split='test')
+        # Enable binary labels for evaluation
+        ds = ECGDataset(df, PROCESSED_PATH, task_label_col='task_a_label', shortcut_cfg=shortcut_cfg, split='test', binary_labels=True)
         return DataLoader(ds, batch_size=batch_size, shuffle=False)
 
     results = []
@@ -361,7 +360,7 @@ def main():
 
         try:
             log.info(f"Evaluating model at {ckpt_path}...")
-            model = load_method_model(method, ckpt_path, device=device)
+            model = load_method_model(method, ckpt_path, num_classes=2, device=device)
             
             cfg_pois = OmegaConf.create({
                 "use_shortcut": True, 

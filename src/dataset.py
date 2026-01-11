@@ -9,7 +9,7 @@ class ECGDataset(Dataset):
     """
     ECG Dataset reading from HDF5 processed file.
     """
-    def __init__(self, manifest_df, hdf5_path, task_label_col='task_a_label', shortcut_cfg=None, split='train'):
+    def __init__(self, manifest_df, hdf5_path, task_label_col='task_a_label', shortcut_cfg=None, split='train', binary_labels=False):
         """
         Args:
             manifest_df (pd.DataFrame): DataFrame containing 'unique_id' and labels.
@@ -17,6 +17,7 @@ class ECGDataset(Dataset):
             task_label_col (str): Column name for the target label.
             shortcut_cfg (DictConfig): Configuration for shortcut injection.
             split (str): 'train', 'val', or 'test'.
+            binary_labels (bool): If True, maps 0->0 (Normal) and >0->1 (Abnormal).
         """
         # Validate keys against HDF5
         with h5py.File(hdf5_path, 'r') as f:
@@ -33,6 +34,7 @@ class ECGDataset(Dataset):
         self.task_label_col = task_label_col
         self.shortcut_cfg = shortcut_cfg
         self.split = split
+        self.binary_labels = binary_labels
         self.h5_file = None
 
     def __len__(self):
@@ -78,6 +80,10 @@ class ECGDataset(Dataset):
         unique_id = row['unique_id']
         label = row[self.task_label_col]
         
+        # Binary Mapping Logic
+        if self.binary_labels:
+            label = 0 if label == 0 else 1
+        
         # Domain Mapping
         source = row['dataset_source']
         # 0: PTB-XL, 1: Chapman
@@ -104,6 +110,10 @@ class ECGDataset(Dataset):
                 
                 # Check target label (Assuming Binary: 0=Normal, >0=Abnormal for simplicity of this benchmark)
                 # Or specific class. Let's assume Correlation targets Abnormal (non-zero)
+                
+                # Use mapped label if binary_labels is on, or raw label logic if careful.
+                # Logic: Isolate "Abnormal" vs "Normal".
+                # If binary_labels is False, label might be >0. 
                 is_abnormal = (label != 0) 
                 
                 rng = np.random.default_rng(seed=idx) # Deterministic per sample for reproducibility

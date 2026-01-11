@@ -35,7 +35,8 @@ def check_versions():
 
 def test_resnet_feats():
     print("\nTesting ResNet1d return_feats...")
-    model = ResNet1d(input_channels=12, num_classes=5)
+    # Binary Classification Smoke Check
+    model = ResNet1d(input_channels=12, num_classes=2)
     model.eval()
     x = torch.randn(2, 12, 1000)
     
