@@ -1,6 +1,7 @@
 
 import hydra
 from omegaconf import DictConfig, OmegaConf
+from omegaconf import OmegaConf
 import logging
 import os
 import torch
@@ -14,12 +15,60 @@ from tqdm import tqdm
 from src.dataset import ECGDataset
 from src.utils.metrics import calculate_metrics
 
-# Dynamically import models and methods based on config (or simple factory)
-from src.models.resnet1d import ResNet1d
-from src.methods.erm import ERM
 
-# Setup logging
 log = logging.getLogger(__name__)
+
+def _select_path(cfg, *keys: str, must_exist: bool = False, desc: str = "path") -> str:
+    """
+    Resolve a path from OmegaConf safely (works with struct mode), with repo-relative fallback.
+    Preference order:
+      1) First existing config key among `keys`
+      2) Standard repo fallbacks based on `desc` (manifest/split/processed)
+    """
+    from pathlib import Path as _Path
+    from omegaconf import OmegaConf as _OmegaConf
+
+    # repo root = src/train.py -> parents[1]
+    _REPO = _Path(__file__).resolve().parents[1]
+
+    # 1) Config keys
+    for k in keys:
+        v = _OmegaConf.select(cfg, k)
+        if v is None:
+            continue
+        cand = _Path(str(v))
+        if not cand.is_absolute():
+            cand = (_REPO / cand).resolve()
+        if (not must_exist) or cand.exists():
+            return str(cand)
+
+    # 2) Known fallbacks
+    fallbacks = []
+    if desc == "manifest_path":
+        fallbacks = [
+            _REPO / "data" / "manifests" / "master_manifest.csv",
+            _REPO / "data" / "processed" / "master_manifest.csv",
+        ]
+    elif desc == "split_path":
+        fallbacks = [
+            _REPO / "data" / "manifests" / "splits.json",
+            _REPO / "data" / "processed" / "splits.json",
+        ]
+    elif desc == "processed_path":
+        fallbacks = [
+            _REPO / "data" / "processed" / "signals.h5",
+        ]
+
+    for fb in fallbacks:
+        if (not must_exist) or fb.exists():
+            return str(fb.resolve())
+
+    tried = ", ".join(keys)
+    fb_str = ", ".join(str(x) for x in fallbacks) if fallbacks else ""
+    raise FileNotFoundError(
+        f"Could not resolve {desc}. Tried config keys: {tried}"
+        + (f" and fallbacks: {fb_str}" if fb_str else "")
+    )
 
 def seed_everything(seed):
     torch.manual_seed(seed)
@@ -39,8 +88,8 @@ def main(cfg: DictConfig):
     log.info("Loading Manifest and Splits...")
     # 1. Load Data
     log.info("Loading Manifest and Splits...")
-    manifest_df = pd.read_csv(cfg.data.paths.manifest_path)
-    with open(cfg.data.paths.split_path, 'r') as f:
+    manifest_df = pd.read_csv(_select_path(cfg, 'data.paths.manifest_path', 'data.manifest_path', must_exist=True, desc='manifest_path'))
+    with open(_select_path(cfg, 'data.paths.split_path', 'data.split_path', must_exist=True, desc='split_path'), 'r') as f:
         splits = json.load(f)
         
     # Determine split keys
@@ -82,8 +131,8 @@ def main(cfg: DictConfig):
     log.info(f"Filtered Train Size: {len(train_df)}, Val Size: {len(val_df)}")
     
     # Dataset
-    train_ds = ECGDataset(train_df, cfg.data.paths.processed_path, shortcut_cfg=cfg.data.shortcut, split='train')
-    val_ds = ECGDataset(val_df, cfg.data.paths.processed_path, shortcut_cfg=cfg.data.shortcut, split='val')
+    train_ds = ECGDataset(train_df, _select_path(cfg, 'data.paths.processed_path', 'data.processed_path', must_exist=True, desc='processed_path'), shortcut_cfg=cfg.data.shortcut, split='train')
+    val_ds = ECGDataset(val_df, _select_path(cfg, 'data.paths.processed_path', 'data.processed_path', must_exist=True, desc='processed_path'), shortcut_cfg=cfg.data.shortcut, split='val')
     
     # Dataloaders
     train_loader = DataLoader(train_ds, batch_size=cfg.train.batch_size, shuffle=True, num_workers=0, pin_memory=True)
