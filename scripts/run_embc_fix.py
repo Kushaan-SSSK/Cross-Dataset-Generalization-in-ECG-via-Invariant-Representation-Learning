@@ -212,7 +212,8 @@ def get_train_cmd(train_src, method, condition, seed, out_dir):
         f"hydra.run.dir={out_dir}",
         f"train.epochs={EPOCHS}",
         f"++data.train_sources=[{train_src}]",
-        f"++save_path={out_dir}"
+        f"++save_path={out_dir}",
+        "++model.num_classes=2"  # Enforce Binary Classification
     ]
     
     # Condition Logic
@@ -228,7 +229,7 @@ def get_train_cmd(train_src, method, condition, seed, out_dir):
         
     return cmd
 
-def load_method_model(method_name, ckpt_path, num_classes=7, device='cpu'):
+def load_method_model(method_name, ckpt_path, num_classes=2, device='cpu'):
     # Load state dict
     sd = torch.load(ckpt_path, map_location=device)
     
@@ -293,7 +294,8 @@ def main():
         df = manifest_df[manifest_df['unique_id'].isin(all_ids)]
         df = df[df['dataset_source'] == source]
         
-        ds = ECGDataset(df, PROCESSED_PATH, task_label_col='task_a_label', shortcut_cfg=shortcut_cfg, split='test')
+        # Enable binary labels for evaluation
+        ds = ECGDataset(df, PROCESSED_PATH, task_label_col='task_a_label', shortcut_cfg=shortcut_cfg, split='test', binary_labels=True)
         return DataLoader(ds, batch_size=batch_size, shuffle=False)
 
     results = []
@@ -302,7 +304,7 @@ def main():
     # Run for each direction to keep consistent structure, though Raw is roughly invariant if split is constant.
     # We iterate seeds for Random initialization.
     log.info("--- Running Baseline Probes (Raw & Random) ---")
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    device = torch.device('cuda' if torch.cuda_available() else 'cpu')
     
     for (src_name, tgt_name) in DIRECTIONS:
         # Loaders (Clean)
@@ -361,7 +363,7 @@ def main():
 
         try:
             log.info(f"Evaluating model at {ckpt_path}...")
-            model = load_method_model(method, ckpt_path, device=device)
+            model = load_method_model(method, ckpt_path, num_classes=2, device=device)
             
             cfg_pois = OmegaConf.create({
                 "use_shortcut": True, 
