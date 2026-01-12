@@ -213,7 +213,7 @@ def get_train_cmd(train_src, method, condition, seed, out_dir):
         f"train.epochs={EPOCHS}",
         f"++data.train_sources=[{train_src}]",
         f"++save_path={out_dir}",
-        "++model.num_classes=2"  # Enforce Binary Classification
+        "++model.num_classes=7"  # Enforce Binary Classification
     ]
     
     # Condition Logic
@@ -304,7 +304,7 @@ def main():
     # Run for each direction to keep consistent structure, though Raw is roughly invariant if split is constant.
     # We iterate seeds for Random initialization.
     log.info("--- Running Baseline Probes (Raw & Random) ---")
-    device = torch.device('cuda' if torch.cuda_available() else 'cpu')
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     
     for (src_name, tgt_name) in DIRECTIONS:
         # Loaders (Clean)
