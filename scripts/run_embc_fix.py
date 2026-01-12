@@ -351,15 +351,37 @@ def main():
         ckpt_path = os.path.join(out_dir, "best_model.pt")
         
         # ... (Training Loop remains same) ...
-        if not os.path.exists(ckpt_path):
+        # Helper to verify checkpoint
+        def verify_checkpoint(path):
+            try:
+                sd = torch.load(path, map_location='cpu')
+                # Check FC weight shape
+                for k, v in sd.items():
+                    if 'fc.weight' in k or 'classifier.weight' in k:
+                        if v.shape[0] != 2: # Expecting 2 classes
+                            return False
+                return True
+            except Exception:
+                return False
+
+        # Check if training is needed
+        need_train = True
+        if os.path.exists(ckpt_path):
+            if verify_checkpoint(ckpt_path):
+                log.info(f"Skipping training (valid checkpoint exists): {run_name}")
+                need_train = False
+            else:
+                log.warning(f"Checkpoint mismatch detected for {run_name} (Stale 7-class model). Deleting and Retraining.")
+                os.remove(ckpt_path)
+                need_train = True
+        
+        if need_train:
             log.info(f"Training {run_name}...")
             cmd = get_train_cmd(src_name, method, cond, seed, out_dir)
             ret = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
             if ret.returncode != 0:
                 log.error(f"Training failed for {run_name}: {ret.stderr.decode()}")
                 continue
-        else:
-            log.info(f"Skipping training (checkpoint exists): {run_name}")
 
         try:
             log.info(f"Evaluating model at {ckpt_path}...")
