@@ -29,7 +29,8 @@ class ECGDataset(Dataset):
         final_len = len(self.manifest_df)
         
         if initial_len != final_len:
-            print(f"Warning: Dropped {initial_len - final_len} records missing from HDF5.")
+            # print(f"Warning: Dropped {initial_len - final_len} records missing from HDF5.")
+            pass
             
         self.hdf5_path = hdf5_path
         self.task_label_col = task_label_col
