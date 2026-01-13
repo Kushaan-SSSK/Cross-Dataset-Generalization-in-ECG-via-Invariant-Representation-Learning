@@ -18,6 +18,25 @@ class ERM(BaseMethod):
     def training_step(self, batch, batch_idx):
         x, y = batch[:2] # Ignore domain if present
         logits = self(x)
+        
+        # --- SAFETY CHECK: labels must be int64 in [0, C-1] for CrossEntropyLoss ---
+        if y is None:
+            raise ValueError("y is None in training_step")
+        if y.dtype != torch.long:
+            y = y.long()
+        # y should be shape [B]
+        if y.ndim != 1:
+            raise ValueError(f"Expected y.ndim==1, got {y.ndim}, y.shape={tuple(y.shape)}")
+        C = logits.shape[1]
+        ymin = int(y.min().item())
+        ymax = int(y.max().item())
+        if ymin < 0 or ymax >= C:
+            raise ValueError(
+                f"Invalid label range for CrossEntropyLoss: min={ymin}, max={ymax}, "
+                f"num_classes(C)={C}, logits.shape={tuple(logits.shape)}, y.shape={tuple(y.shape)}"
+            )
+        # -------------------------------------------------------------------------
+
         loss = self.criterion(logits, y)
         
         # Calculate acc for monitoring
@@ -32,6 +51,25 @@ class ERM(BaseMethod):
     def validation_step(self, batch, batch_idx):
         x, y = batch[:2]
         logits = self(x)
+        
+        # --- SAFETY CHECK: labels must be int64 in [0, C-1] for CrossEntropyLoss ---
+        if y is None:
+            raise ValueError("y is None in training_step")
+        if y.dtype != torch.long:
+            y = y.long()
+        # y should be shape [B]
+        if y.ndim != 1:
+            raise ValueError(f"Expected y.ndim==1, got {y.ndim}, y.shape={tuple(y.shape)}")
+        C = logits.shape[1]
+        ymin = int(y.min().item())
+        ymax = int(y.max().item())
+        if ymin < 0 or ymax >= C:
+            raise ValueError(
+                f"Invalid label range for CrossEntropyLoss: min={ymin}, max={ymax}, "
+                f"num_classes(C)={C}, logits.shape={tuple(logits.shape)}, y.shape={tuple(y.shape)}"
+            )
+        # -------------------------------------------------------------------------
+
         loss = self.criterion(logits, y)
         preds = torch.argmax(logits, dim=1)
         
