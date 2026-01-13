@@ -371,8 +371,11 @@ def main():
                 log.info(f"Skipping training (valid checkpoint exists): {run_name}")
                 need_train = False
             else:
-                log.warning(f"Checkpoint mismatch detected for {run_name} (Stale 7-class model). Deleting and Retraining.")
-                os.remove(ckpt_path)
+                log.warning(f"Checkpoint mismatch detected for {run_name} (Stale 7-class model). Deleting ENTIRE output directory and Retraining.")
+                import shutil
+                if os.path.exists(out_dir):
+                    shutil.rmtree(out_dir)
+                    os.makedirs(out_dir, exist_ok=True)
                 need_train = True
         
         if need_train:
