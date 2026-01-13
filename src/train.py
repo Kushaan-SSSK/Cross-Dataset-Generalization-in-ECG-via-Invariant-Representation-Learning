@@ -140,6 +140,13 @@ def main(cfg: DictConfig):
     
     # 2. Model & Method
     log.info("Instantiating Model...")
+    log.info(f"DEBUG: cfg.model before override: {cfg.model}")
+    
+    # FORCE NUM_CLASSES (Sanity Check / Nuclear Fix)
+    if 'num_classes' in cfg.model:
+        cfg.model.num_classes = 2
+        log.info("DEBUG: Forcing cfg.model.num_classes = 2")
+    
     # Instantiate model using Hydra target or manual
     model = hydra.utils.instantiate(cfg.model)
     
