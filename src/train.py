@@ -144,6 +144,12 @@ def main(cfg: DictConfig):
     
     # FORCE NUM_CLASSES (Sanity Check / Nuclear Fix)
     
+    # FORCE NUM_CLASSES (Sanity Check / Nuclear Fix)
+    # Unconditional override to match evaluation logic
+    OmegaConf.set_struct(cfg, False) # Allow adding keys if missing
+    cfg.model.num_classes = 2
+    log.info("DEBUG: GLOBAL FORCE cfg.model.num_classes = 2")
+    
     # Instantiate model using Hydra target or manual
     model = hydra.utils.instantiate(cfg.model)
     
