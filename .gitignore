@@ -79,3 +79,6 @@ outputs/
 # backups
 *.bak
 *.bak2
+
+# local backups
+*.bak*
