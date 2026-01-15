@@ -206,7 +206,7 @@ def get_random_features(loader, device, seed):
     Extracts features from a randomly initialized (untrained) ResNet1d.
     """
     torch.manual_seed(seed)
-    model = ResNet1d(input_channels=12, num_classes=5) # Init random
+    model = ResNet1d(input_channels=12, num_classes=2) # Init random
     model.to(device)
     model.eval()
     
@@ -266,7 +266,7 @@ def get_train_cmd(train_src, method, condition, seed, out_dir):
         f"train.epochs={EPOCHS}",
         f"++data.train_sources=[{train_src}]",
         f"++save_path={out_dir}",
-        "++model.num_classes=7"  # Enforce Binary Classification
+        "++model.num_classes=2"  # Enforce Binary Classification
     ]
     
     # Condition Logic
