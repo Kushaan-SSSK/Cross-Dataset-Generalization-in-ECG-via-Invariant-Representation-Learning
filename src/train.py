@@ -79,6 +79,11 @@ def seed_everything(seed):
 
 @hydra.main(config_path="../config", config_name="main", version_base="1.2")
 def main(cfg: DictConfig):
+    # PATCH: ensure torch is imported early in main()
+    # A later 'import torch' inside main makes torch a local name.
+    # Import it here so any early uses (device=...) do not crash.
+    import torch
+
 # PATCH: ensure cfg.data.shortcut exists
     # Some configs do not define data.shortcut, but code may access it.
     # In struct mode, missing keys raise ConfigAttributeError. Make it safe.
@@ -104,6 +109,23 @@ def main(cfg: DictConfig):
     # 1. Load Data
     log.info("Loading Manifest and Splits...")
     manifest_df = pd.read_csv(_select_path(cfg, 'data.paths.manifest_path', 'data.manifest_path', must_exist=True, desc='manifest_path'))
+    # PATCH: remap label columns to 0..C-1
+    # Some tasks use non-contiguous label IDs (e.g., {0,6} for binary), which breaks CrossEntropyLoss.
+    # Remap any integer-like label columns to contiguous IDs 0..(n-1).
+    try:
+        import pandas as _pd
+        _df = manifest_df
+        _label_cols = [c for c in _df.columns if "label" in str(c).lower()]
+        for _c in _label_cols:
+            _s = _pd.to_numeric(_df[_c], errors="coerce")
+            _vals = sorted(set(_s.dropna().round().astype(int).tolist()))
+            if 2 <= len(_vals) <= 50:
+                _map = {v:i for i,v in enumerate(_vals)}
+                _df[_c] = _s.apply(lambda x: _map.get(int(round(x))) if _pd.notna(x) else x)
+        manifest_df = _df
+    except Exception:
+        pass
+
     with open(_select_path(cfg, 'data.paths.split_path', 'data.split_path', must_exist=True, desc='split_path'), 'r') as f:
         splits = json.load(f)
         
@@ -201,6 +223,89 @@ def main(cfg: DictConfig):
             # DANN expects (x,y,d).
             # So passing 'batch' (tuple of tensors on device) is correct.
             
+            # PATCH: normalize binary labels to 0/1
+            
+            # Some tasks use non-contiguous label IDs for binary classification (e.g., {0,6}).
+            
+            # CrossEntropyLoss requires labels in [0..C-1]. If C==2, map any nonzero -> 1.
+            
+            try:
+            
+                import torch
+            
+                if int(getattr(cfg.model, "num_classes", -1)) == 2:
+            
+                    _y = None
+            
+                    _key = None
+            
+                    if isinstance(batch, dict):
+            
+                        for _k in ("y", "label", "labels", "target", "targets"):
+            
+                            if _k in batch:
+            
+                                _y = batch[_k]
+            
+                                _key = _k
+            
+                                break
+            
+                    elif isinstance(batch, (tuple, list)) and len(batch) >= 2:
+            
+                        _y = batch[1]
+            
+                    if _y is not None and torch.is_tensor(_y) and _y.numel() > 0:
+            
+                        if int(_y.max().item()) > 1:
+            
+                            _y2 = (_y > 0).long()
+            
+                            if isinstance(batch, dict) and _key is not None:
+            
+                                batch[_key] = _y2
+            
+                            elif isinstance(batch, tuple):
+            
+                                batch = (batch[0], _y2, *batch[2:])
+            
+                            elif isinstance(batch, list):
+            
+                                batch[1] = _y2
+            
+            except Exception:
+            
+                pass
+
+            
+            # PATCH: normalize binary labels before step calls
+            # If running binary CE (C=2) but labels are encoded as {0,6} etc, remap nonzero -> 1.
+            try:
+                if int(getattr(getattr(cfg, "model", object()), "num_classes", -1)) == 2:
+                    _y = None
+                    _key = None
+                    if isinstance(batch, dict):
+                        for _k in ("y", "label", "labels", "target", "targets"):
+                            if _k in batch:
+                                _y = batch[_k]
+                                _key = _k
+                                break
+                    elif isinstance(batch, (tuple, list)) and len(batch) >= 2:
+                        _y = batch[1]
+                    if _y is not None and hasattr(_y, "numel") and _y.numel() > 0:
+                        # torch tensor check without importing torch locally
+                        _maxy = int(_y.max().item()) if hasattr(_y, "max") else None
+                        if _maxy is not None and _maxy > 1:
+                            _y2 = (_y > 0).long()
+                            if isinstance(batch, dict) and _key is not None:
+                                batch[_key] = _y2
+                            elif isinstance(batch, tuple):
+                                batch = (batch[0], _y2, *batch[2:])
+                            elif isinstance(batch, list):
+                                batch[1] = _y2
+            except Exception:
+                pass
+
             out = method.training_step(batch, steps)
             loss = out['loss']
             
@@ -227,6 +332,34 @@ def main(cfg: DictConfig):
                 batch = [b.to(device) for b in batch]
                 
                 # Pass full batch to method (it handles unpacking)
+                # PATCH: normalize binary labels before step calls
+                # If running binary CE (C=2) but labels are encoded as {0,6} etc, remap nonzero -> 1.
+                try:
+                    if int(getattr(getattr(cfg, "model", object()), "num_classes", -1)) == 2:
+                        _y = None
+                        _key = None
+                        if isinstance(batch, dict):
+                            for _k in ("y", "label", "labels", "target", "targets"):
+                                if _k in batch:
+                                    _y = batch[_k]
+                                    _key = _k
+                                    break
+                        elif isinstance(batch, (tuple, list)) and len(batch) >= 2:
+                            _y = batch[1]
+                        if _y is not None and hasattr(_y, "numel") and _y.numel() > 0:
+                            # torch tensor check without importing torch locally
+                            _maxy = int(_y.max().item()) if hasattr(_y, "max") else None
+                            if _maxy is not None and _maxy > 1:
+                                _y2 = (_y > 0).long()
+                                if isinstance(batch, dict) and _key is not None:
+                                    batch[_key] = _y2
+                                elif isinstance(batch, tuple):
+                                    batch = (batch[0], _y2, *batch[2:])
+                                elif isinstance(batch, list):
+                                    batch[1] = _y2
+                except Exception:
+                    pass
+
                 out = method.validation_step(batch, 0)
                 val_losses.append(out['loss'].item())
                 all_preds.append(out['preds'])

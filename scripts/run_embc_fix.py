@@ -1,4 +1,6 @@
 
+# PATCH: force probe num_classes=7
+
 import os
 import sys
 from pathlib import Path
@@ -47,6 +49,136 @@ SUMMARY_FILE = os.path.join(BASE_OUT_DIR, "embc_fix_summary.csv")
     # --- Helper Functions (Copied/Adapted) ---
     
 # PATCH: infer num_classes for evaluation
+
+# PATCH: infer num_classes from manifest for probes
+def infer_num_classes_from_manifest(manifest_path: str, label_col: str | None = None, prefer: int = 7) -> int:
+    """Infer num_classes from the manifest.
+    - If label_col provided, use it.
+    - Otherwise, search numeric columns and prefer a contiguous label space of size `prefer`
+      (e.g., 7 classes with labels 0..6).
+    - Avoid ID-like columns (patient_id, subject_id, record_id, fold, split, etc.)
+    """
+    import pandas as pd
+
+    df = pd.read_csv(manifest_path)
+
+    # Strong name-based candidates (likely labels)
+    good_name_keys = ["label", "target", "y", "class"]
+    bad_name_keys  = ["id", "patient", "subject", "record", "study", "file", "path", "fold", "split", "seed", "index"]
+
+    def is_bad_name(c: str) -> bool:
+        lc = c.lower()
+        return any(k in lc for k in bad_name_keys)
+
+    def is_good_name(c: str) -> bool:
+        lc = c.lower()
+        return any(k in lc for k in good_name_keys)
+
+    cols = list(df.columns)
+
+    if label_col is not None:
+        if label_col not in df.columns:
+            raise ValueError(f"label_col={label_col} not found in manifest columns")
+        s = pd.to_numeric(df[label_col], errors="coerce").dropna().astype(int)
+        u = sorted(set(s.tolist()))
+        return len(u)
+
+    # Consider numeric columns only, filter out obviously bad name columns first
+    numeric_cols = []
+    for c in cols:
+        if is_bad_name(c):
+            continue
+        s = pd.to_numeric(df[c], errors="coerce").dropna()
+        if len(s) == 0:
+            continue
+        # if it's mostly integer-like
+        s_int = s.round().astype(int)
+        if (s - s_int).abs().mean() < 1e-6:
+            numeric_cols.append(c)
+
+    # Rank candidates by "label-likeness"
+    # Prefer:
+    #   - contiguous classes starting at 0 (or any contiguous range)
+    #   - exactly `prefer` classes (default 7)
+    #   - good name match
+    def stats(c: str):
+        import numpy as np
+        s = pd.to_numeric(df[c], errors="coerce").dropna().astype(int)
+        u = sorted(set(s.tolist()))
+        n = len(u)
+        if n == 0:
+            return None
+        mn, mx = u[0], u[-1]
+        contiguous = int(u == list(range(mn, mx + 1)))
+        starts0 = int(mn == 0)
+        exact_prefer = int(n == prefer and contiguous == 1 and (mx - mn + 1) == prefer)
+        goodname = int(is_good_name(c))
+        # score tuple (higher is better)
+        return (exact_prefer, goodname, contiguous, starts0, n, -(mx - mn), c, mn, mx)
+
+    scored = []
+    for c in numeric_cols:
+        st = stats(c)
+        if st is not None:
+            scored.append(st)
+
+    if not scored:
+        return 2
+
+    scored.sort(reverse=True)
+    best = scored[0]
+    exact_prefer, goodname, contiguous, starts0, n, span_neg, c, mn, mx = best
+
+    # If we didn't hit prefer=7, still sanity cap to something reasonable
+    # (avoid accidentally picking 100s of IDs)
+    if n > 50:
+        # Try to find any column with 5-15 classes contiguous as fallback
+        for cand in scored:
+            _, gn, cont, s0, nn, _, cc, mmn, mmx = cand
+            if cont and 5 <= nn <= 15:
+                return int(nn)
+        return 2
+
+    return int(n)
+
+def infer_num_classes_from_manifest(manifest_path: str, label_col: str | None = None) -> int:
+    """Infer num_classes from the manifest by finding a numeric label column and counting unique labels.
+    If label_col is None, pick a reasonable label column automatically.
+    """
+    import pandas as pd
+
+    df = pd.read_csv(manifest_path)
+
+    # Candidate label columns by name
+    name_cands = [c for c in df.columns if any(k in c.lower() for k in ["label", "target", "class", "y"])]
+
+    def score_col(c: str):
+        s = pd.to_numeric(df[c], errors="coerce").dropna()
+        if len(s) == 0:
+            return (-1, -1, c)
+        u = sorted(set(s.astype(int).tolist()))
+        # prefer 5-50 classes (ECG often 5 or 7), penalize binary unless nothing else
+        n = len(u)
+        span = (max(u) - min(u)) if u else 0
+        # score: more classes better, non-binary preferred, contiguous preferred
+        contiguous = int(u == list(range(min(u), max(u)+1))) if u else 0
+        return (n, contiguous, c)
+
+    if label_col is not None and label_col in df.columns:
+        s = pd.to_numeric(df[label_col], errors="coerce").dropna().astype(int)
+        return int(len(sorted(set(s.tolist()))))
+
+    # Try name-based candidates first, else all columns
+    search_cols = name_cands if name_cands else list(df.columns)
+    scored = [score_col(c) for c in search_cols]
+    scored.sort(reverse=True)  # highest n, then contiguous
+    best_n, best_contig, best_c = scored[0]
+
+    if best_n <= 1:
+        # fallback
+        return 2
+    return int(best_n)
+
 def infer_num_classes_from_ckpt(ckpt_path: str) -> int:
     """Infer number of classes from a saved checkpoint.
     Works for common patterns:
@@ -201,12 +333,14 @@ def get_raw_features(loader):
         
     return np.concatenate(all_feats)
 
-def get_random_features(loader, device, seed):
+def get_random_features(loader, device, seed, num_classes: int | None = None):
+    if num_classes is None:
+        num_classes = 2
     """
     Extracts features from a randomly initialized (untrained) ResNet1d.
     """
     torch.manual_seed(seed)
-    model = ResNet1d(input_channels=12, num_classes=2) # Init random
+    model = ResNet1d(input_channels=12, num_classes=num_classes) # Init random
     model.to(device)
     model.eval()
     
@@ -328,6 +462,14 @@ def main():
     )
     
     log.info(f"Using Manifest Path: {MANIFEST_PATH}")
+
+    # PATCH: set global num_classes from manifest (used by probes/eval)
+    try:
+        num_classes = infer_num_classes_from_manifest(MANIFEST_PATH)
+    except NameError:
+        # some scripts use manifest_path variable instead
+        num_classes = infer_num_classes_from_manifest(manifest_path)
+    log.info(f"DEBUG: Inferred num_classes from manifest = {num_classes}")
     log.info(f"Using Split Path: {SPLIT_PATH}")
     
     import pandas as pd
@@ -385,8 +527,8 @@ def main():
         # Vary initialization via seed
         for seed in SEEDS:
             log.info(f"Probing RANDOM features for {src_name}->{tgt_name} (Seed {seed})")
-            feat_src_rand = get_random_features(l_src, device, seed)
-            feat_tgt_rand = get_random_features(l_tgt, device, seed)
+            feat_src_rand = get_random_features(l_src, device, seed, num_classes=num_classes)
+            feat_tgt_rand = get_random_features(l_tgt, device, seed, num_classes=num_classes)
             
             acc, auc = run_leakage_probe(feat_src_rand, feat_tgt_rand)
             results.append({
