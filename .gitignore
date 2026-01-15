@@ -67,3 +67,15 @@ scripts/*.bak.*
 ptb-xl-a-large-publicly-available-electrocardiography-dataset*
 mit-bih-arrhythmia-database*
 a-large-scale-12-lead-electrocardiogram-database*
+
+# --- local artifacts ---
+runs/
+outputs/
+*.pt
+*.pth
+*.ckpt
+*.log
+
+# backups
+*.bak
+*.bak2

@@ -46,6 +46,59 @@ SUMMARY_FILE = os.path.join(BASE_OUT_DIR, "embc_fix_summary.csv")
 
     # --- Helper Functions (Copied/Adapted) ---
     
+# PATCH: infer num_classes for evaluation
+def infer_num_classes_from_ckpt(ckpt_path: str) -> int:
+    """Infer number of classes from a saved checkpoint.
+    Works for common patterns:
+      - raw state_dict (Tensor values)
+      - dict containing 'state_dict' / 'model' / 'model_state_dict'
+    Falls back to 2 if it cannot infer.
+    """
+    try:
+        import torch
+        obj = torch.load(ckpt_path, map_location="cpu")
+        sd = None
+        if isinstance(obj, dict):
+            for k in ("state_dict", "model_state_dict", "model", "net", "weights"):
+                if k in obj and isinstance(obj[k], dict):
+                    sd = obj[k]
+                    break
+            if sd is None:
+                # might already be a state dict
+                sd = obj
+        elif isinstance(obj, dict):
+            sd = obj
+
+        if not isinstance(sd, dict):
+            return 2
+
+        # Look for classifier/fc weights: shape [C, ...]
+        candidate_keys = []
+        for k, v in sd.items():
+            if not hasattr(v, "shape"):
+                continue
+            lk = k.lower()
+            if any(s in lk for s in ("classifier", "fc", "head")) and lk.endswith("weight"):
+                candidate_keys.append(k)
+
+        # Prefer the most "head-like" keys
+        for pref in ("classifier", "head", "fc"):
+            for k in candidate_keys:
+                if pref in k.lower():
+                    w = sd[k]
+                    if len(w.shape) >= 1:
+                        return int(w.shape[0])
+
+        # If none matched, try any 2D weight near the end
+        for k, v in reversed(list(sd.items())):
+            if hasattr(v, "shape") and len(v.shape) == 2:
+                return int(v.shape[0])
+
+        return 2
+    except Exception:
+        return 2
+
+
 def resolve_data_path(primary: str, fallback: str) -> str:
     primary_p = Path(primary)
     if primary_p.exists():
@@ -229,7 +282,7 @@ def get_train_cmd(train_src, method, condition, seed, out_dir):
         
     return cmd
 
-def load_method_model(method_name, ckpt_path, num_classes=2, device='cpu'):
+def load_method_model(method_name, ckpt_path, num_classes=None, device='cpu'):
     # Load state dict
     sd = torch.load(ckpt_path, map_location=device)
     
@@ -388,7 +441,9 @@ def main():
 
         try:
             log.info(f"Evaluating model at {ckpt_path}...")
-            model = load_method_model(method, ckpt_path, num_classes=2, device=device)
+            num_classes = infer_num_classes_from_ckpt(ckpt_path)
+
+            model = load_method_model(method, ckpt_path, num_classes=num_classes, device=device)
             
             cfg_pois = OmegaConf.create({
                 "use_shortcut": True, 

@@ -15,7 +15,6 @@ from tqdm import tqdm
 from src.dataset import ECGDataset
 from src.utils.metrics import calculate_metrics
 
-
 log = logging.getLogger(__name__)
 
 def _select_path(cfg, *keys: str, must_exist: bool = False, desc: str = "path") -> str:
@@ -80,6 +79,22 @@ def seed_everything(seed):
 
 @hydra.main(config_path="../config", config_name="main", version_base="1.2")
 def main(cfg: DictConfig):
+# PATCH: ensure cfg.data.shortcut exists
+    # Some configs do not define data.shortcut, but code may access it.
+    # In struct mode, missing keys raise ConfigAttributeError. Make it safe.
+    from omegaconf import OmegaConf, open_dict
+    if OmegaConf.select(cfg, "data.shortcut", default=None) is None:
+        with open_dict(cfg):
+            if "data" not in cfg:
+                cfg.data = {}
+            cfg.data.shortcut = {
+                "use_shortcut": False,
+                "type": "none",
+                "correlation": 0.0,
+                "force": False,
+                "split": "train",
+            }
+
     log.info(f"Training Config: \n{OmegaConf.to_yaml(cfg)}")
     
     seed_everything(cfg.seed)
@@ -147,9 +162,6 @@ def main(cfg: DictConfig):
     # FORCE NUM_CLASSES (Sanity Check / Nuclear Fix)
     # Unconditional override to match evaluation logic
     OmegaConf.set_struct(cfg, False) # Allow adding keys if missing
-    cfg.model.num_classes = 2
-    log.info("DEBUG: GLOBAL FORCE cfg.model.num_classes = 2")
-    
     # Instantiate model using Hydra target or manual
     model = hydra.utils.instantiate(cfg.model)
     
