@@ -541,7 +541,8 @@ def main():
     log.info(f"Total Traind Experiments: {len(grid)}")
     
     for method, (src_name, tgt_name), cond, seed in tqdm(grid, desc="Experiments"):
-        run_name = f"{src_name}_{method}_{cond}_{seed}"
+        # run_name now includes direction to prevent collisions
+        run_name = f"{src_name}2{tgt_name}_{method}_{cond}_{seed}"
         out_dir = os.path.join(BASE_OUT_DIR, run_name)
         ckpt_path = os.path.join(out_dir, "best_model.pt")
         
@@ -573,9 +574,26 @@ def main():
                     os.makedirs(out_dir, exist_ok=True)
                 need_train = True
         
+        # Calculate Baselines (Load ONE batch to check distribution)
+        # We need to use binary_labels=True for consistent baselining
+        def get_baseline(loader):
+            all_y = []
+            for _, y, _ in loader:
+                all_y.append(y.cpu().numpy())
+            all_y = np.concatenate(all_y)
+            counts = np.bincount(all_y)
+            majority_acc = counts.max() / counts.sum()
+            return majority_acc, counts
+
         if need_train:
             log.info(f"Training {run_name}...")
+            # Updated get_train_cmd to pass binary_labels logic if needed via hydra?
+            # Actually src.train needs to handle it.
+            # We need to add ++data.binary_labels=True to get_train_cmd
+            
             cmd = get_train_cmd(src_name, method, cond, seed, out_dir)
+            cmd.append("++data.binary_labels=True") # Explicitly enforce binary
+            
             ret = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
             if ret.returncode != 0:
                 log.error(f"Training failed for {run_name}: {ret.stderr.decode()}")
@@ -583,9 +601,7 @@ def main():
 
         try:
             log.info(f"Evaluating model at {ckpt_path}...")
-            num_classes = infer_num_classes_from_ckpt(ckpt_path)
-
-            model = load_method_model(method, ckpt_path, num_classes=num_classes, device=device)
+            model = load_method_model(method, ckpt_path, num_classes=2, device=device)
             
             cfg_pois = OmegaConf.create({
                 "use_shortcut": True, 
@@ -594,9 +610,15 @@ def main():
                 "force": True
             })
             
-            l_src_clean = get_loader(src_name, 'test', None)
-            l_tgt_clean = get_loader(tgt_name, 'test', None)
-            l_tgt_pois = get_loader(tgt_name, 'test', cfg_pois)
+            # Loaders with BINARY LABELS enforced
+            l_src_clean = get_loader(src_name, 'test', None, batch_size=512) # Faster eval
+            l_tgt_clean = get_loader(tgt_name, 'test', None, batch_size=512)
+            l_tgt_pois = get_loader(tgt_name, 'test', cfg_pois, batch_size=512)
+            
+            # Log Baselines
+            base_src, cnt_src = get_baseline(l_src_clean)
+            base_tgt, cnt_tgt = get_baseline(l_tgt_clean)
+            log.info(f"Baselines -- Source({src_name}): {base_src:.4f} {cnt_src} | Target({tgt_name}): {base_tgt:.4f} {cnt_tgt}")
             
             res_src = forward_looped(model, l_src_clean, device, return_feats=True)
             res_tgt = forward_looped(model, l_tgt_clean, device, return_feats=True)
@@ -622,10 +644,12 @@ def main():
                 'OOD_Drop': ood_drop,
                 'Leakage_Acc': leak_acc,
                 'Leakage_AUC': leak_auc,
-                'ECE': tgt_ece
+                'ECE': tgt_ece,
+                'Baseline_Src': base_src,
+                'Baseline_Tgt': base_tgt
             }
             results.append(res_row)
-            log.info(f"Evaluation Results for {run_name}: Tgt_Clean={tgt_c_f1:.4f}, Tgt_Pois={tgt_p_f1:.4f}")
+            log.info(f"Eval {run_name}: Tgt_Clean={tgt_c_f1:.4f} (Base={base_tgt:.4f}), Tgt_Pois={tgt_p_f1:.4f}")
             
             pd.DataFrame(results).to_csv(RESULTS_FILE, index=False)
             

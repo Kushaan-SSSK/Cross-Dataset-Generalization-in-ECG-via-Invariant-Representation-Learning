@@ -82,7 +82,8 @@ class ECGDataset(Dataset):
         unique_id = row['unique_id']
         label = row[self.task_label_col]
         
-        # Binary Mapping Logic
+        # Binary Mapping Logic (Explicit 0 vs Rest)
+        # 0 = Normal, 1 = Abnormal
         if self.binary_labels:
             label = 0 if label == 0 else 1
         
@@ -110,12 +111,9 @@ class ECGDataset(Dataset):
             elif self.split == 'train':
                 p_corr = self.shortcut_cfg.correlation
                 
-                # Check target label (Assuming Binary: 0=Normal, >0=Abnormal for simplicity of this benchmark)
-                # Or specific class. Let's assume Correlation targets Abnormal (non-zero)
-                
-                # Use mapped label if binary_labels is on, or raw label logic if careful.
-                # Logic: Isolate "Abnormal" vs "Normal".
-                # If binary_labels is False, label might be >0. 
+                # Check target label (Assuming Binary: 0=Normal, 1=Abnormal)
+                # If binary_labels=True, label is 0 or 1.
+                # If binary_labels=False, raw classes > 0 are abnormal.
                 is_abnormal = (label != 0) 
                 
                 rng = np.random.default_rng(seed=idx) # Deterministic per sample for reproducibility
