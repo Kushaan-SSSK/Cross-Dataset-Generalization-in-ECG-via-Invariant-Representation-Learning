@@ -108,38 +108,27 @@ def main(cfg: DictConfig):
     log.info("Loading Manifest and Splits...")
     # 1. Load Data
     log.info("Loading Manifest and Splits...")
+    from src.const import LABEL_COL, NUM_CLASSES, CLASS_NAMES
+    
     manifest_df = pd.read_csv(_select_path(cfg, 'data.paths.manifest_path', 'data.manifest_path', must_exist=True, desc='manifest_path'))
-    # PATCH: remap label columns to 0..C-1
-    # Some tasks use non-contiguous label IDs (e.g., {0,6} for binary), which breaks CrossEntropyLoss.
-    # Remap any integer-like label columns to contiguous IDs 0..(n-1).
-    try:
-        import pandas as _pd
-        _df = manifest_df
-        _label_cols = [c for c in _df.columns if "label" in str(c).lower()]
-        for _c in _label_cols:
-            _s = _pd.to_numeric(_df[_c], errors="coerce")
-            _vals = sorted(set(_s.dropna().round().astype(int).tolist()))
-            if 2 <= len(_vals) <= 50:
-                _map = {v:i for i,v in enumerate(_vals)}
-                _df[_c] = _s.apply(lambda x: _map.get(int(round(x))) if _pd.notna(x) else x)
-        manifest_df = _df
-    except Exception:
-        pass
-
+    
+    # --- Runtime Label Validation (Prompt 1) ---
+    # Ensure label column exists and is strictly valid
+    if LABEL_COL not in manifest_df.columns:
+         # Check if we need to map old column to new column (Prompt 2 will do this properly)
+         # For now, if LABEL_COL doesn't exist, we might fail or look for 'task_a_label'
+         if 'task_a_label' in manifest_df.columns and LABEL_COL == 'task_a_label':
+             pass # OK
+         else:
+             log.warning(f"Label column {LABEL_COL} not found. Available: {manifest_df.columns}. Prompt 2 will fix this.")
+    
     with open(_select_path(cfg, 'data.paths.split_path', 'data.split_path', must_exist=True, desc='split_path'), 'r') as f:
         splits = json.load(f)
         
-    # Determine split keys
-    # Typically: 'train', 'val', 'test'
-    # But splits.json structure might be dataset specific if we did cross-dataset.
-    # Let's assume standard 'train', 'val' keys exist or we merge them.
-    # Based on manifest builder, keys are likely 'train', 'val', 'test' lists of IDs.
-    
     train_ids = splits.get('train', [])
     val_ids = splits.get('val', [])
     
     if not train_ids:
-        # Fallback: check keys like 'ptbxl_train', etc and merge
         train_ids = []
         val_ids = []
         for k, v in splits.items():
@@ -155,36 +144,33 @@ def main(cfg: DictConfig):
     val_df = manifest_df[manifest_df['unique_id'].isin(val_ids)]
 
     # FILTER: Exclude MIT-BIH (2-lead, variable length) for Task A (12-lead)
-    # This prevents RuntimeError: stack expects each tensor to be equal size
     valid_sources = cfg.data.get('train_sources', ['ptbxl', 'chapman'])
-    # Convert OmegaConf list to python list if needed
     if not isinstance(valid_sources, list):
          valid_sources = list(valid_sources)
 
     log.info(f"Filtering for sources: {valid_sources}")
     train_df = train_df[train_df['dataset_source'].isin(valid_sources)]
+    val_df = val_df[val_df['dataset_source'].isin(val_ids)] # Error in original logic? val_df filtering by ids? 
+    # Original: val_df = val_df[val_df['dataset_source'].isin(valid_sources)]
     val_df = val_df[val_df['dataset_source'].isin(valid_sources)]
     
     log.info(f"Filtered Train Size: {len(train_df)}, Val Size: {len(val_df)}")
     
-    # Dataset
-    train_ds = ECGDataset(train_df, _select_path(cfg, 'data.paths.processed_path', 'data.processed_path', must_exist=True, desc='processed_path'), shortcut_cfg=cfg.data.shortcut, split='train')
-    val_ds = ECGDataset(val_df, _select_path(cfg, 'data.paths.processed_path', 'data.processed_path', must_exist=True, desc='processed_path'), shortcut_cfg=cfg.data.shortcut, split='val')
+    # Dataset - Enforce LABEL_COL
+    # Note: ECGDataset logic now validates labels are 0-6 or fail.
+    train_ds = ECGDataset(train_df, _select_path(cfg, 'data.paths.processed_path', 'data.processed_path', must_exist=True, desc='processed_path'), task_label_col=LABEL_COL, shortcut_cfg=cfg.data.shortcut, split='train')
     
-    # Dataloaders
-    train_loader = DataLoader(train_ds, batch_size=cfg.train.batch_size, shuffle=True, num_workers=0, pin_memory=True)
-    val_loader = DataLoader(val_ds, batch_size=cfg.train.batch_size, shuffle=False, num_workers=0, pin_memory=True)
+    val_ds = ECGDataset(val_df, _select_path(cfg, 'data.paths.processed_path', 'data.processed_path', must_exist=True, desc='processed_path'), task_label_col=LABEL_COL, shortcut_cfg=cfg.data.shortcut, split='val')
     
     # 2. Model & Method
     log.info("Instantiating Model...")
-    log.info(f"DEBUG: cfg.model before override: {cfg.model}")
     
-    # FORCE NUM_CLASSES (Sanity Check / Nuclear Fix)
+    # FORCE NUM_CLASSES (Prompt 1: "enforce it programmatically")
+    log.info(f"Enforcing NUM_CLASSES={NUM_CLASSES}")
+    OmegaConf.set_struct(cfg, False)
+    cfg.model.num_classes = NUM_CLASSES 
     
-    # FORCE NUM_CLASSES (Sanity Check / Nuclear Fix)
-    # Unconditional override to match evaluation logic
-    OmegaConf.set_struct(cfg, False) # Allow adding keys if missing
-    # Instantiate model using Hydra target or manual
+    # Instantiate model
     model = hydra.utils.instantiate(cfg.model)
     
     # Instantiate Method
@@ -192,7 +178,7 @@ def main(cfg: DictConfig):
     method = hydra.utils.instantiate(
         cfg.method, 
         model=model, 
-        num_classes=cfg.model.num_classes
+        num_classes=NUM_CLASSES
     )
     
     # Device

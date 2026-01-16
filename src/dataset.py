@@ -5,20 +5,22 @@ import torch
 from torch.utils.data import Dataset
 import numpy as np
 
-from omegaconf import OmegaConf
+from src.const import LABEL_COL, NUM_CLASSES, CLASS_NAMES
+from src.sast import SASTProtocol
+
 class ECGDataset(Dataset):
     """
     ECG Dataset reading from HDF5 processed file.
+    Enforces strict 7-class task definition.
     """
-    def __init__(self, manifest_df, hdf5_path, task_label_col='task_a_label', shortcut_cfg=None, split='train', binary_labels=False):
+    def __init__(self, manifest_df, hdf5_path, task_label_col=LABEL_COL, shortcut_cfg=None, split='train'):
         """
         Args:
             manifest_df (pd.DataFrame): DataFrame containing 'unique_id' and labels.
             hdf5_path (str): Path to the processed .h5 file.
-            task_label_col (str): Column name for the target label.
+            task_label_col (str): Column name for the target label. Default: src.const.LABEL_COL
             shortcut_cfg (DictConfig): Configuration for shortcut injection.
             split (str): 'train', 'val', or 'test'.
-            binary_labels (bool): If True, maps 0->0 (Normal) and >0->1 (Abnormal).
         """
         # Validate keys against HDF5
         with h5py.File(hdf5_path, 'r') as f:
@@ -36,43 +38,25 @@ class ECGDataset(Dataset):
         self.task_label_col = task_label_col
         self.shortcut_cfg = shortcut_cfg
         self.split = split
-        self.binary_labels = binary_labels
         self.h5_file = None
-
+        
+        # --- Runtime Label Validation ---
+        unique_labels = self.manifest_df[self.task_label_col].unique()
+        if not set(unique_labels).issubset(set(CLASS_NAMES)):
+             raise ValueError(f"CRITICAL: Found labels outside expected set {CLASS_NAMES}. Found: {unique_labels}. Fix manifest mapping.")
+        
+        # --- SAST Protocol ---
+        if shortcut_cfg:
+             if 'split' not in shortcut_cfg: 
+                 OmegaConf.set_struct(shortcut_cfg, False)
+                 shortcut_cfg.split = split
+        
+        self.sast = SASTProtocol(shortcut_cfg if shortcut_cfg else {})
+        
     def __len__(self):
         return len(self.manifest_df)
         
-    def _add_shortcut(self, signal):
-        """Add specified artifact noise (Mains, BW, EMG)."""
-        if self.shortcut_cfg is None: return signal
-        
-        sType = getattr(self.shortcut_cfg, 'type', 'mains')
-        amp = OmegaConf.select(self.shortcut_cfg, "amplitude", default=0.1)
-        fs = 100 # Assumed
-        t = np.arange(signal.shape[0]) / fs
-        
-        noise = np.zeros_like(t)
-        
-        if sType == 'mains':
-            freq = getattr(self.shortcut_cfg, 'freq', 60)
-            noise = amp * np.sin(2 * np.pi * freq * t)
-            
-        elif sType == 'bw': # Baseline Wander
-            # Low freq sinusoid (0.5Hz) + Linear drift
-            noise = amp * np.sin(2 * np.pi * 0.5 * t) + (amp * 0.5 * t)
-            
-        elif sType == 'emg': # Electromyographic (Muscle) Noise
-            # High freq Gaussian noise burst
-            # Burst covers random 50% of the signal
-            rng = np.random.default_rng(seed=int(signal[0,0]*1000)) 
-            mask = rng.random(len(t)) > 0.5
-            raw_noise = rng.normal(0, 1, len(t))
-            # EMG has high freq content
-            noise = amp * raw_noise * mask
-            
-        # Add to Lead I (index 0)
-        signal[:, 0] += noise
-        return signal
+
 
     def __getitem__(self, idx):
         if self.h5_file is None:
@@ -82,10 +66,7 @@ class ECGDataset(Dataset):
         unique_id = row['unique_id']
         label = row[self.task_label_col]
         
-        # Binary Mapping Logic (Explicit 0 vs Rest)
-        # 0 = Normal, 1 = Abnormal
-        if self.binary_labels:
-            label = 0 if label == 0 else 1
+        # Binary Mapping Logic REMOVED. Enforcing 7-class.
         
         # Domain Mapping
         source = row['dataset_source']
@@ -99,36 +80,8 @@ class ECGDataset(Dataset):
         except KeyError:
             raise KeyError(f"ID {unique_id} not found in {self.hdf5_path}")
             
-        # --- Synthetic Shortcut Logic ---
-        if self.shortcut_cfg and self.shortcut_cfg.use_shortcut:
-            # Protocol: 
-            # TRAIN: Inject correlation (e.g. 90% in Abnormal, 10% in Normal)
-            # TEST/VAL: Clean (0% injection) to measure reliance drop
-            
-            inject = False
-            if getattr(self.shortcut_cfg, 'force', False):
-                inject = True
-            elif self.split == 'train':
-                p_corr = self.shortcut_cfg.correlation
-                
-                # Check target label (Assuming Binary: 0=Normal, 1=Abnormal)
-                # If binary_labels=True, label is 0 or 1.
-                # If binary_labels=False, raw classes > 0 are abnormal.
-                is_abnormal = (label != 0) 
-                
-                rng = np.random.default_rng(seed=idx) # Deterministic per sample for reproducibility
-                
-                if is_abnormal:
-                    # Inject with high probability (p_corr)
-                    if rng.random() < p_corr:
-                        inject = True
-                else: 
-                    # Normal: Inject with low probability (1 - p_corr)
-                    if rng.random() < (1 - p_corr):
-                        inject = True
-            
-            if inject:
-                signal = self._add_shortcut(signal)
+        # --- SAST Injection ---
+        signal = self.sast.inject_single(signal, label=label, unique_id=unique_id)
 
         # shape (C, L)
         if signal.shape[0] > signal.shape[1]: 

@@ -35,7 +35,7 @@ class BasicBlock1d(nn.Module):
         return out
 
 class ResNet1d(nn.Module):
-    def __init__(self, input_channels=12, num_classes=2, layers=[2, 2, 2, 2], planes=[64, 128, 256, 512]):
+    def __init__(self, input_channels=12, num_classes=7, layers=[2, 2, 2, 2], planes=[64, 128, 256, 512]):
         super(ResNet1d, self).__init__()
         import logging
         logging.getLogger(__name__).info(f"DEBUG: ResNet1d initialized with num_classes={num_classes}")
