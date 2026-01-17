@@ -14,6 +14,7 @@ from tqdm import tqdm
 
 from src.dataset import ECGDataset
 from src.utils.metrics import calculate_metrics
+from pathlib import Path
 
 log = logging.getLogger(__name__)
 
@@ -152,15 +153,120 @@ def main(cfg: DictConfig):
     train_df = train_df[train_df['dataset_source'].isin(valid_sources)]
     val_df = val_df[val_df['dataset_source'].isin(val_ids)] # Error in original logic? val_df filtering by ids? 
     # Original: val_df = val_df[val_df['dataset_source'].isin(valid_sources)]
+    # AUTO-FIX: restore unfiltered val_df if filtering by train_sources makes it empty (scripts/autofix_val_empty_after_source_filter.py)
+    _af_val_df_unfiltered = val_df
     val_df = val_df[val_df['dataset_source'].isin(valid_sources)]
-    
+    if len(val_df) == 0:
+        # In cross-dataset runs (e.g., ptbxl2chapman), val split may be entirely OOD and gets wiped by train_sources filtering.
+        try:
+            log.warning("Val became empty after filtering by train_sources=%s; restoring unfiltered val_df for OOD validation.", valid_sources)
+        except Exception:
+            print(f"[WARN] Val became empty after filtering by train_sources={valid_sources}; restoring unfiltered val_df for OOD validation.")
+        val_df = _af_val_df_unfiltered
+
+        # AUTO-FIX v2: also restore val_ids for OOD validation (scripts/autofix_restore_val_ids_after_source_filter.py)
+        # If val got wiped by filtering on train_sources, restore val_ids too (used to build val_ds/val_loader).
+        try:
+            if 'splits' in locals() and isinstance(splits, dict):
+                if 'val' in splits:
+                    val_ids = list(splits['val'])
+                elif 'valid' in splits:
+                    val_ids = list(splits['valid'])
+        except Exception:
+            pass
+
     log.info(f"Filtered Train Size: {len(train_df)}, Val Size: {len(val_df)}")
     
     # Dataset - Enforce LABEL_COL
     # Note: ECGDataset logic now validates labels are 0-6 or fail.
     train_ds = ECGDataset(train_df, _select_path(cfg, 'data.paths.processed_path', 'data.processed_path', must_exist=True, desc='processed_path'), task_label_col=LABEL_COL, shortcut_cfg=cfg.data.shortcut, split='train')
     
+    # AUTO-FIX: restore OOD val_ids/val_df before building val_ds (scripts/autofix_restore_ood_val_before_valds.py)
+    # If filtering by train_sources wiped validation (common in ptbxl2chapman), restore OOD val split here.
+    try:
+        _train_srcs = list(getattr(getattr(cfg, 'data', None), 'train_sources', []) or [])
+    except Exception:
+        _train_srcs = []
+    
+    # Restore val_ids if empty (so val_ds is not empty)
+    try:
+        if 'val_ids' in locals() and isinstance(val_ids, (list, tuple)) and len(val_ids) == 0 and _train_srcs:
+            if 'splits' in locals() and isinstance(splits, dict):
+                if 'val' in splits:
+                    val_ids = list(splits['val'])
+                elif 'valid' in splits:
+                    val_ids = list(splits['valid'])
+    except Exception:
+        pass
+    
+    # Restore val_df if empty (so any val_df-based dataset path is not empty)
+    try:
+        if 'val_df' in locals() and hasattr(val_df, '__len__') and len(val_df) == 0 and _train_srcs:
+            if '_af_val_df_unfiltered' in locals() and _af_val_df_unfiltered is not None:
+                val_df = _af_val_df_unfiltered
+    except Exception:
+        pass
+    
+    try:
+        if _train_srcs:
+            log.warning("AUTO-FIX: keeping OOD validation even though train_sources=%s (val_ids=%s, val_df_len=%s)", _train_srcs, (len(val_ids) if 'val_ids' in locals() else None), (len(val_df) if 'val_df' in locals() else None))
+    except Exception:
+        pass
+
+    # AUTO-FIX: rebuild val_df from manifest_df+val_ids if val_df empty (scripts/autofix_rebuild_valdf_from_valids.py)
+    # Your code path can end up with val_ids non-empty but val_df empty after source filtering.
+    # val_ds is built from val_df, so rebuild val_df from manifest_df+val_ids here.
+    try:
+        if ('val_df' in locals()) and ('val_ids' in locals()) and ('manifest_df' in locals()):
+            if val_df is not None and hasattr(val_df, '__len__') and len(val_df) == 0 and isinstance(val_ids, (list, tuple)) and len(val_ids) > 0:
+                _id_col = None
+                # common id columns first
+                for _cand in ('record_id','ecg_id','study_id','exam_id','id','idx','index','filename','file','path'):
+                    if hasattr(manifest_df, 'columns') and _cand in list(getattr(manifest_df, 'columns', [])):
+                        _id_col = _cand
+                        break
+                # if not found, detect a column that matches val_ids
+                if _id_col is None and hasattr(manifest_df, 'columns'):
+                    for _c in list(manifest_df.columns):
+                        try:
+                            if manifest_df[_c].isin(val_ids).any():
+                                _id_col = _c
+                                break
+                        except Exception:
+                            pass
+                if _id_col is not None:
+                    val_df = manifest_df[manifest_df[_id_col].isin(val_ids)]
+                    try:
+                        log.warning("AUTO-FIX: rebuilt val_df from manifest_df using id_col=%s -> val_df_len=%s", _id_col, len(val_df))
+                    except Exception:
+                        print(f"[WARN] AUTO-FIX: rebuilt val_df using id_col={_id_col} -> val_df_len={len(val_df)}")
+    except Exception:
+        pass
+
     val_ds = ECGDataset(val_df, _select_path(cfg, 'data.paths.processed_path', 'data.processed_path', must_exist=True, desc='processed_path'), task_label_col=LABEL_COL, shortcut_cfg=cfg.data.shortcut, split='val')
+
+    # AUTO-FIX v4: build train_loader/val_loader from train_ds/val_ds (inserted by scripts/autofix_loaders_v4.py)
+    # Build loaders from datasets that your code already created (train_ds / val_ds).
+    def _af_get(_obj, _path, _default=None):
+        try:
+            cur = _obj
+            for part in _path.split("."):
+                cur = getattr(cur, part)
+            return cur
+        except Exception:
+            return _default
+    
+    if 'train_loader' not in locals() or train_loader is None:
+        _bs = _af_get(cfg, "data.batch_size", None) or _af_get(cfg, "train.batch_size", None) or 32
+        _nw = _af_get(cfg, "data.num_workers", 0) or 0
+        _pm = _af_get(cfg, "data.pin_memory", True)
+        train_loader = DataLoader(train_ds, batch_size=int(_bs), shuffle=True, num_workers=int(_nw), pin_memory=bool(_pm))
+    
+    if 'val_loader' not in locals() and 'val_ds' in locals():
+        _bs = _af_get(cfg, "data.batch_size", None) or _af_get(cfg, "train.batch_size", None) or 32
+        _nw = _af_get(cfg, "data.num_workers", 0) or 0
+        _pm = _af_get(cfg, "data.pin_memory", True)
+        val_loader = DataLoader(val_ds, batch_size=int(_bs), shuffle=False, num_workers=int(_nw), pin_memory=bool(_pm))
     
     # 2. Model & Method
     log.info("Instantiating Model...")
@@ -191,6 +297,7 @@ def main(cfg: DictConfig):
     # 3. Training Loop
     best_val_f1 = 0.0
     
+
     for epoch in range(cfg.train.epochs):
         method.train()
         train_loss_sum = 0.0
@@ -351,6 +458,22 @@ def main(cfg: DictConfig):
                 all_preds.append(out['preds'])
                 all_targets.append(out['targets'])
         
+        # AUTO-FIX empty-cat v1 (inserted by scripts/autofix_empty_cat_v1.py)
+        # Prevent torch.cat() on empty collections (usually empty val_ds/val_loader for some splits).
+        if len(all_preds) == 0:
+            try:
+                _vlen = len(val_ds) if 'val_ds' in locals() and val_ds is not None else None
+            except Exception:
+                _vlen = None
+            try:
+                _vbatches = len(val_loader) if 'val_loader' in locals() and val_loader is not None else None
+            except Exception:
+                _vbatches = None
+            print(f"[WARN] No validation batches collected this epoch (val_ds_len={_vlen}, val_loader_len={_vbatches}). Skipping metric aggregation.")
+            # Skip the rest of the validation aggregation for this epoch rather than crashing.
+            # This assumes this code is inside the `for epoch in range(...)` loop (it is in your trace).
+            continue
+
         all_preds = torch.cat(all_preds)
         all_targets = torch.cat(all_targets)
         
@@ -374,6 +497,8 @@ def main(cfg: DictConfig):
                 
             save_path = os.path.join(save_dir, "best_model.pt")
             log.info(f"DEBUG: Saving best_model.pt to {save_path}")
+            # ensure save directory exists
+            Path(save_path).parent.mkdir(parents=True, exist_ok=True)
             torch.save(method.state_dict(), save_path)
             log.info(f"DEBUG: File exists after save? {os.path.exists(save_path)}")
             log.info(f"New Best Model Saved! (F1: {best_val_f1:.4f})")

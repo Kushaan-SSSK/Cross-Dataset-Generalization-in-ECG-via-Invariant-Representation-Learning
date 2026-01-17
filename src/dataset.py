@@ -7,6 +7,7 @@ import numpy as np
 
 from src.const import LABEL_COL, NUM_CLASSES, CLASS_NAMES
 from src.sast import SASTProtocol
+from omegaconf import OmegaConf
 
 class ECGDataset(Dataset):
     """

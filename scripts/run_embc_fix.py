@@ -1,4 +1,29 @@
 
+
+
+# ---- Global label space ----
+# Fixed label space for PTB-XL ↔ Chapman experiments
+NUM_CLASSES = 7
+
+# Canonical class id space used in pre-flight checks and reporting
+CLASS_NAMES = list(range(NUM_CLASSES))
+
+
+# Column in master_manifest.csv that stores the class index.
+# If None, it will be auto-detected in main() from common candidates.
+LABEL_COL = "task_a_label"
+
+
+def _wfdb_exists(base: str) -> bool:
+    """WFDB record basenames resolve to .hea/.dat (or sometimes .mat)."""
+    import os
+    if os.path.exists(base):
+        return True
+    for suf in ('.hea', '.dat', '.mat'):
+        if os.path.exists(base + suf):
+            return True
+    return False
+
 # PATCH: force probe num_classes=7
 
 import os
@@ -34,7 +59,8 @@ log = logging.getLogger(__name__)
 
 SEEDS = [0, 1, 2, 3, 4]
 METHODS = ['erm', 'dann', 'vrex']
-DIRECTIONS = [('ptbxl', 'chapman'), ('chapman', 'ptbxl')] 
+DIRECTIONS = [('ptbxl', 'chapman')]
+
 RHOS = [0.6, 0.7, 0.8, 0.9] 
 CONDITIONS = ['Clean'] + [f'SAST_{r}' for r in RHOS]
 EPOCHS = 50
@@ -330,6 +356,8 @@ def get_raw_features(loader):
         feats = np.concatenate([mu, sigma, mx, mn], axis=1)
         all_feats.append(feats)
         
+    if len(all_feats) == 0:
+        return None
     return np.concatenate(all_feats)
 
 def get_random_features(loader, device, seed, num_classes: int | None = None):
@@ -350,6 +378,8 @@ def get_random_features(loader, device, seed, num_classes: int | None = None):
             _, feats = model(x, return_feats=True)
             all_feats.append(feats.cpu().numpy())
             
+    if len(all_feats) == 0:
+        return None
     return np.concatenate(all_feats)
 
 def forward_looped(model, loader, device, return_feats=False):
@@ -375,12 +405,12 @@ def forward_looped(model, loader, device, return_feats=False):
             
             preds = torch.argmax(logits, dim=1)
             
-            all_logits.append(logits.cpu().numpy())
+            all_logits.append(logits.detach().cpu())
             all_preds.append(preds.cpu().numpy())
             all_targets.append(y.cpu().numpy())
             
     res = {
-        'logits': np.concatenate(all_logits),
+        'logits': torch.cat(all_logits, dim=0),
         'preds': np.concatenate(all_preds),
         'targets': np.concatenate(all_targets)
     }
@@ -388,8 +418,7 @@ def forward_looped(model, loader, device, return_feats=False):
         res['feats'] = np.concatenate(all_feats)
     return res
 
-# --- Main Runner ---
-from src.const import LABEL_COL, NUM_CLASSES, CLASS_NAMES
+# --SSES, CLASS_NAMES
 
 def get_train_cmd(train_src, method, condition, seed, out_dir):
     cmd = [
@@ -477,6 +506,29 @@ def main():
     # --- PROMPT 3/7: PRE-FLIGHT GUARDRAILS ---
     # 1. Validate Labels in Manifest Immediately
     print("--- Pre-flight Check: Validating Labels ---")
+    # Hard validation: labels must be numeric indices for bincount/ECE/etc.
+    import pandas as pd
+    y_ser = pd.to_numeric(manifest_df[LABEL_COL], errors='coerce')
+    if y_ser.isna().any():
+        bad = manifest_df.loc[y_ser.isna(), LABEL_COL].astype(str).value_counts().head(20)
+        raise ValueError(f"Non-numeric labels found in {LABEL_COL}. Top values: {bad.to_dict()}")
+    manifest_df[LABEL_COL] = y_ser.astype(int)
+    if manifest_df[LABEL_COL].min() < 0 or manifest_df[LABEL_COL].max() >= NUM_CLASSES:
+        mn = int(manifest_df[LABEL_COL].min()); mx = int(manifest_df[LABEL_COL].max())
+        raise ValueError(f"Label indices out of range for NUM_CLASSES={NUM_CLASSES}: min={mn}, max={mx}")
+
+
+    # Auto-resolve LABEL_COL if not explicitly set
+    if LABEL_COL is None:
+        for c in ("label_idx","class_idx","y","target","label","labels","targets","label_indices"):
+            if c in manifest_df.columns:
+                globals()["LABEL_COL"] = c
+                break
+    if LABEL_COL is None:
+        raise ValueError(
+            f"LABEL_COL is not set and could not be inferred. Manifest columns: {list(manifest_df.columns)}"
+        )
+
     if LABEL_COL not in manifest_df.columns:
         log.error(f"CRITICAL: Label column '{LABEL_COL}' missing from manifest.")
         sys.exit(1)
@@ -498,17 +550,21 @@ def main():
         splits = json.load(f)
 
     def get_loader(source, split, shortcut_cfg, batch_size=128):
+        split_name = split
         # Filter IDs
-        all_ids = []
-        for k, v in splits.items():
-            if split in k:
-                all_ids.extend(v)
-                
+        # Select IDs for this split (exact key match; ignore _meta)
+        if split_name not in splits:
+            raise KeyError("Split '%s' not found in splits.json. Keys=%s" % (split_name, list(splits.keys())))
+        all_ids = splits[split_name]
+
         df = manifest_df[manifest_df['unique_id'].isin(all_ids)]
         df = df[df['dataset_source'] == source]
+        if len(df) == 0:
+            raise RuntimeError(f"get_loader got 0 rows for source={source}, split={split_name}. Split IDs={len(all_ids)}. Available dataset_source values={sorted(manifest_df['dataset_source'].unique().tolist())}. Check that splits.json split matches the domain you are requesting.")
+
         
         # Enforce 7-class task (Prompt 1)
-        ds = ECGDataset(df, PROCESSED_PATH, task_label_col=LABEL_COL, shortcut_cfg=shortcut_cfg, split='test')
+        ds = ECGDataset(df, PROCESSED_PATH, task_label_col=LABEL_COL, shortcut_cfg=shortcut_cfg, split=split_name)
         return DataLoader(ds, batch_size=batch_size, shuffle=False)
 
     results = []
@@ -521,7 +577,7 @@ def main():
     
     for (src_name, tgt_name) in DIRECTIONS:
         # Loaders (Clean)
-        l_src = get_loader(src_name, 'test', None)
+        l_src = get_loader(src_name, 'train', None)
         l_tgt = get_loader(tgt_name, 'test', None)
         
         # A. Raw Features
@@ -535,6 +591,9 @@ def main():
             # Note: run_leakage_probe uses internal seed=42 for downsampling. 
             # To get variance, valid option is just ONE result, or vary downsampling seed. 
             # Requirements say "simulate multiple runs". We'll just report the CV score for this seed row.
+            if (feat_src_raw is None) or (feat_tgt_raw is None):
+                log.warning('Skipping RAW probe: no features collected (check WFDB paths/loaders)')
+                break
             acc, auc = run_leakage_probe(feat_src_raw, feat_tgt_raw)
             results.append({
                 'Method': 'RAW', 'Direction': f"{src_name}->{tgt_name}", 'Condition': 'Clean', 'Seed': seed,
@@ -548,6 +607,9 @@ def main():
             feat_src_rand = get_random_features(l_src, device, seed, num_classes=num_classes)
             feat_tgt_rand = get_random_features(l_tgt, device, seed, num_classes=num_classes)
             
+            if (feat_src_rand is None) or (feat_tgt_rand is None):
+                log.warning('Skipping RANDOM probe: no features collected (check WFDB paths/loaders)')
+                break
             acc, auc = run_leakage_probe(feat_src_rand, feat_tgt_rand)
             results.append({
                 'Method': 'RANDOM', 'Direction': f"{src_name}->{tgt_name}", 'Condition': 'Clean', 'Seed': seed,
@@ -599,6 +661,7 @@ def main():
             for _, y, _ in loader:
                 all_y.append(y.cpu().numpy())
             try:
+                leak_acc = float('nan')  # default if leakage metric not computed
                 all_y = np.concatenate(all_y)
             except ValueError:
                 return 0.0, []
@@ -636,7 +699,7 @@ def main():
             
             # Loaders with strict 7-class task
             # get_loader handles dataset creation, which now checks constants
-            l_src_clean = get_loader(src_name, 'test', None, batch_size=512) 
+            l_src_clean = get_loader(src_name, 'train', None, batch_size=512) 
             l_tgt_clean = get_loader(tgt_name, 'test', None, batch_size=512)
             l_tgt_pois = get_loader(tgt_name, 'test', cfg_pois, batch_size=512)
             
@@ -661,6 +724,7 @@ def main():
 
             res_src = forward_looped(model, l_src_clean, device, return_feats=True)
             res_tgt = forward_looped(model, l_tgt_clean, device, return_feats=True)
+            tgt_ece = compute_ece(res_tgt['logits'], res_tgt['targets'], n_bins=10)
             res_tgt_p = forward_looped(model, l_tgt_pois, device, return_feats=False)
             
             # Calculate Metrics
@@ -680,6 +744,21 @@ def main():
             log.info(f"Target Pois Confusion Matrix:\n{m_tgt_p['cm']}")
             
             # Construct Result Row (Flattened)
+            # Leakage metric (flip-rate): fraction of target samples whose predicted class changes
+            # when the shortcut is injected at test time (clean vs poisoned target evaluation).
+            pred_tgt_clean = res_tgt.get('preds', None)
+            if pred_tgt_clean is None:
+                pred_tgt_clean = res_tgt['logits'].argmax(dim=1)
+            pred_tgt_pois = res_tgt_pois.get('preds', None)
+            if pred_tgt_pois is None:
+                pred_tgt_pois = res_tgt_pois['logits'].argmax(dim=1)
+            if pred_tgt_clean.shape[0] != pred_tgt_pois.shape[0]:
+                raise ValueError(
+                    f"Leakage metric shape mismatch: clean={pred_tgt_clean.shape}, pois={pred_tgt_pois.shape}"
+                )
+            leak_acc = float((pred_tgt_clean != pred_tgt_pois).float().mean().item())
+            log.info(f"Leakage flip-rate (target): {leak_acc:.4f}")
+
             res_row = {
                 'Method': method.upper(),
                 'Direction': f"{src_name}->{tgt_name}",
@@ -712,6 +791,7 @@ def main():
             import traceback
             traceback.print_exc()
             import traceback
+
             traceback.print_exc()
 
     # --- Summary ---

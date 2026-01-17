@@ -82,3 +82,13 @@ outputs/
 
 # local backups
 *.bak*
+
+# local datasets / dumps
+WFDBRecords/
+records500/
+archive/
+outputs/
+runs/
+
+# temporary autofix scripts
+scripts/autofix_*.py
