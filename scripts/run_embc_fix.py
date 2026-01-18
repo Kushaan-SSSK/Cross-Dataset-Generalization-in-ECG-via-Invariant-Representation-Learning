@@ -709,18 +709,22 @@ def main():
             log.info(f"Baselines (7-Class) -- Source({src_name}): {base_src:.4f} {cnt_src} | Target({tgt_name}): {base_tgt:.4f} {cnt_tgt}")
             
             # --- Poisoning Validation (Prompt 7) ---
-            # To verify poisoning, we need a way to check if signal was modified. 
-            # Since loader returns only (x, y, d), we can't easily check 'poison_flag'.
-            # However, we can infer it if we trust the config, or we can add a 'poisoned' flag to dataset return?
-            # Or just rely on visual verification in Prompt 6.
-            # For now, we log the INTENDED poisoning config.
-            log.info(f"Target Poisoning Config: {cfg_pois}")
-            # If possible, check fraction?
-            # get_loader returns standard (x, y, d).
-            # We will rely on model performance drop as proxy for now, but explicit check would be better.
-            # User check: "Log the fraction of examples poisoned". 
-            # Since we force poisoning (force=True), fraction should be 100%.
-            log.info(f"Poisoning Fraction (Expected): 100% (Force=True)")
+            # Log SAST Protocol Info only for SAST conditions (Problem D fix)
+            if cond.startswith('SAST_'):
+                log.info(f"Target Poisoning Config: {cfg_pois}")
+                log.info(f"Poisoning Fraction (Expected): 100% (Force=True)")
+
+            # --- Sanity Check: Verify poisoning is applied (Problem E fix) ---
+            # Use temporary loaders for sanity check to avoid consuming batch from eval loaders
+            l_tgt_clean_tmp = get_loader(tgt_name, 'test', None, batch_size=512)
+            l_tgt_pois_tmp = get_loader(tgt_name, 'test', cfg_pois, batch_size=512)
+            batch_clean = next(iter(l_tgt_clean_tmp))
+            batch_pois = next(iter(l_tgt_pois_tmp))
+            signal_diff = (batch_clean[0] - batch_pois[0]).abs().mean().item()
+            if signal_diff < 1e-6:
+                log.warning(f"SANITY FAIL: Clean and Poisoned signals are IDENTICAL (diff={signal_diff:.2e}). Check SAST injection.")
+            else:
+                log.info(f"Sanity Check PASS: Clean vs Poisoned signal diff = {signal_diff:.4f}")
 
             res_src = forward_looped(model, l_src_clean, device, return_feats=True)
             res_tgt = forward_looped(model, l_tgt_clean, device, return_feats=True)
@@ -748,18 +752,27 @@ def main():
             # when the shortcut is injected at test time (clean vs poisoned target evaluation).
             pred_tgt_clean = res_tgt.get('preds', None)
             if pred_tgt_clean is None:
-                pred_tgt_clean = res_tgt['logits'].argmax(dim=1)
-            pred_tgt_pois = res_tgt_pois.get('preds', None)
+                pred_tgt_clean = res_tgt['logits'].argmax(dim=1).numpy()
+            # Fix Problem A: use res_tgt_p (not res_tgt_pois)
+            pred_tgt_pois = res_tgt_p.get('preds', None)
             if pred_tgt_pois is None:
-                pred_tgt_pois = res_tgt_pois['logits'].argmax(dim=1)
+                pred_tgt_pois = res_tgt_p['logits'].argmax(dim=1).numpy()
+            
+            # Ensure numpy arrays for comparison (Problem C fix)
+            if isinstance(pred_tgt_clean, torch.Tensor):
+                pred_tgt_clean = pred_tgt_clean.numpy()
+            if isinstance(pred_tgt_pois, torch.Tensor):
+                pred_tgt_pois = pred_tgt_pois.numpy()
+            
             if pred_tgt_clean.shape[0] != pred_tgt_pois.shape[0]:
                 raise ValueError(
                     f"Leakage metric shape mismatch: clean={pred_tgt_clean.shape}, pois={pred_tgt_pois.shape}"
                 )
-            leak_acc = float((pred_tgt_clean != pred_tgt_pois).float().mean().item())
+            leak_acc = float((pred_tgt_clean != pred_tgt_pois).mean())
             log.info(f"Leakage flip-rate (target): {leak_acc:.4f}")
 
             res_row = {
+                'Status': 'success',  # Problem G fix: track status
                 'Method': method.upper(),
                 'Direction': f"{src_name}->{tgt_name}",
                 'Condition': cond,
@@ -770,7 +783,7 @@ def main():
                 'OOD_Drop': m_src['val_f1'] - m_tgt_c['val_f1'],
                 'ECE': tgt_ece,
                 'Leakage_Acc': leak_acc,
-                'Leakage_AUC': leak_auc,
+                'Leakage_AUC': float('nan'),  # Problem B fix: AUC only computed for baseline probes
             }
             
             # Add scalar metrics with prefixes
@@ -788,10 +801,16 @@ def main():
             
         except Exception as e:
             log.error(f"Evaluation failed for {run_name}: {e}")
+            # Problem G fix: record failed experiments
+            results.append({
+                'Status': 'failed',
+                'Method': method.upper(),
+                'Direction': f"{src_name}->{tgt_name}",
+                'Condition': cond,
+                'Seed': seed,
+                'Error': str(e)
+            })
             import traceback
-            traceback.print_exc()
-            import traceback
-
             traceback.print_exc()
 
     # --- Summary ---
