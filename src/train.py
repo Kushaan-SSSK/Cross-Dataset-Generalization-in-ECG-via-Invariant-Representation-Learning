@@ -278,10 +278,24 @@ def main(cfg: DictConfig):
     if use_class_weights:
         from sklearn.utils.class_weight import compute_class_weight
         labels = train_df[LABEL_COL].values
-        # Compute balanced class weights (inverse frequency)
-        class_weights = compute_class_weight('balanced', classes=np.arange(NUM_CLASSES), y=labels)
+        # Get unique classes present in training data
+        unique_classes = np.unique(labels)
+        
+        # Compute balanced class weights only for classes present
+        weights_present = compute_class_weight('balanced', classes=unique_classes, y=labels)
+        
+        # Create full weight array for all NUM_CLASSES
+        # For missing classes, use max weight (they shouldn't be predicted anyway)
+        class_weights = np.ones(NUM_CLASSES, dtype=np.float32)
+        max_weight = weights_present.max() if len(weights_present) > 0 else 1.0
+        class_weights *= max_weight  # Default for missing classes
+        
+        for cls, weight in zip(unique_classes, weights_present):
+            if 0 <= cls < NUM_CLASSES:
+                class_weights[cls] = weight
+        
         class_weights = torch.tensor(class_weights, dtype=torch.float32)
-        log.info(f"Using class weights: {class_weights.tolist()}")
+        log.info(f"Using class weights: {class_weights.tolist()} (classes present: {unique_classes.tolist()})")
     
     # Instantiate Method
     log.info(f"Instantiating Method: {cfg.method._target_}")
