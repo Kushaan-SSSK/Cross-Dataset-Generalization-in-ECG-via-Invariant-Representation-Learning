@@ -9,13 +9,22 @@ class VREx(BaseMethod):
     V-REx: Variance Risk Extrapolation.
     Penalizes the variance of risks (losses) across domains to encourage invariance.
     Loss = AvgLoss + beta * Var(Losses)
+    Supports optional class weighting for imbalanced datasets.
     """
-    def __init__(self, model, num_classes, beta=10.0, annealing_epochs=10):
+    def __init__(self, model, num_classes, beta=10.0, annealing_epochs=10, class_weights=None):
         super(VREx, self).__init__(model, num_classes)
         self.beta = beta
         self.annealing_epochs = annealing_epochs
         # We need to track epochs for annealing if we want to delay the penalty
         self.register_buffer('steps_counter', torch.tensor(0))
+        
+        # Class weights for imbalanced data
+        if class_weights is not None:
+            if not isinstance(class_weights, torch.Tensor):
+                class_weights = torch.tensor(class_weights, dtype=torch.float32)
+            self.register_buffer('class_weights', class_weights)
+        else:
+            self.class_weights = None
 
     def forward(self, x):
         return self.model(x)
@@ -37,11 +46,10 @@ class VREx(BaseMethod):
         losses = []
         
         # Calculate loss for each domain presence in the batch
-        # Note: If batch size is small, some domains might be missing.
         for d in unique_domains:
             mask = (domains == d)
             if mask.sum() > 0:
-                domain_loss = F.cross_entropy(logits[mask], y[mask])
+                domain_loss = F.cross_entropy(logits[mask], y[mask], weight=self.class_weights)
                 losses.append(domain_loss)
         
         if len(losses) > 1:

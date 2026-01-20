@@ -7,10 +7,18 @@ from src.methods.base import BaseMethod
 class ERM(BaseMethod):
     """
     Standard Empirical Risk Minimization.
+    Supports optional class weighting for imbalanced datasets.
     """
-    def __init__(self, model, num_classes):
+    def __init__(self, model, num_classes, class_weights=None):
         super(ERM, self).__init__(model, num_classes)
-        self.criterion = nn.CrossEntropyLoss()
+        # Use class weights if provided (addresses class imbalance)
+        if class_weights is not None:
+            if not isinstance(class_weights, torch.Tensor):
+                class_weights = torch.tensor(class_weights, dtype=torch.float32)
+            self.register_buffer('class_weights', class_weights)
+            self.criterion = nn.CrossEntropyLoss(weight=self.class_weights)
+        else:
+            self.criterion = nn.CrossEntropyLoss()
 
     def forward(self, x):
         return self.model(x)

@@ -28,11 +28,20 @@ class DANN(BaseMethod):
     """
     Domain-Adversarial Neural Network (DANN).
     Optimizes for Task Loss - lambda * Domain Loss.
+    Supports optional class weighting for imbalanced datasets.
     """
-    def __init__(self, model, num_classes, num_domains=2, alpha=1.0):
+    def __init__(self, model, num_classes, num_domains=2, alpha=1.0, class_weights=None):
         super(DANN, self).__init__(model, num_classes)
         self.num_domains = num_domains
         self.alpha = alpha # Gradient reversal strength
+        
+        # Class weights for imbalanced data
+        if class_weights is not None:
+            if not isinstance(class_weights, torch.Tensor):
+                class_weights = torch.tensor(class_weights, dtype=torch.float32)
+            self.register_buffer('class_weights', class_weights)
+        else:
+            self.class_weights = None
         
         # Domain Discriminator (MLP)
         # We assume model output is features before classification? 
@@ -89,9 +98,9 @@ class DANN(BaseMethod):
         # Features
         features = self.model(x)
         
-        # Task Loss
+        # Task Loss (with class weights if available)
         class_logits = self.classifier(features)
-        class_loss = F.cross_entropy(class_logits, y)
+        class_loss = F.cross_entropy(class_logits, y, weight=self.class_weights)
         
         # Domain Loss with Gradient Reversal
         features_rev = grad_reverse(features, self.alpha)

@@ -151,29 +151,22 @@ def main(cfg: DictConfig):
 
     log.info(f"Filtering for sources: {valid_sources}")
     train_df = train_df[train_df['dataset_source'].isin(valid_sources)]
-    val_df = val_df[val_df['dataset_source'].isin(val_ids)] # Error in original logic? val_df filtering by ids? 
-    # Original: val_df = val_df[val_df['dataset_source'].isin(valid_sources)]
-    # AUTO-FIX: restore unfiltered val_df if filtering by train_sources makes it empty (scripts/autofix_val_empty_after_source_filter.py)
-    _af_val_df_unfiltered = val_df
-    val_df = val_df[val_df['dataset_source'].isin(valid_sources)]
-    if len(val_df) == 0:
-        # In cross-dataset runs (e.g., ptbxl2chapman), val split may be entirely OOD and gets wiped by train_sources filtering.
-        try:
-            log.warning("Val became empty after filtering by train_sources=%s; restoring unfiltered val_df for OOD validation.", valid_sources)
-        except Exception:
-            print(f"[WARN] Val became empty after filtering by train_sources={valid_sources}; restoring unfiltered val_df for OOD validation.")
-        val_df = _af_val_df_unfiltered
-
-        # AUTO-FIX v2: also restore val_ids for OOD validation (scripts/autofix_restore_val_ids_after_source_filter.py)
-        # If val got wiped by filtering on train_sources, restore val_ids too (used to build val_ds/val_loader).
-        try:
-            if 'splits' in locals() and isinstance(splits, dict):
-                if 'val' in splits:
-                    val_ids = list(splits['val'])
-                elif 'valid' in splits:
-                    val_ids = list(splits['valid'])
-        except Exception:
-            pass
+    
+    # --- FIXED: Always exclude MIT-BIH from validation (incompatible shape) ---
+    # First, exclude MIT-BIH unconditionally (2-lead data breaks batching)
+    val_df = val_df[val_df['dataset_source'] != 'mitbih']
+    _val_df_no_mitbih = val_df.copy()
+    
+    # Then, try to filter to train_sources for in-domain validation
+    val_df_filtered = val_df[val_df['dataset_source'].isin(valid_sources)]
+    
+    if len(val_df_filtered) > 0:
+        # Have in-domain validation data
+        val_df = val_df_filtered
+    else:
+        # No in-domain validation - use OOD validation (but still excluding MIT-BIH)
+        log.warning("Val became empty after filtering by train_sources=%s; using OOD validation (excluding mitbih).", valid_sources)
+        val_df = _val_df_no_mitbih
 
     log.info(f"Filtered Train Size: {len(train_df)}, Val Size: {len(val_df)}")
     
@@ -279,12 +272,24 @@ def main(cfg: DictConfig):
     # Instantiate model
     model = hydra.utils.instantiate(cfg.model)
     
+    # --- Compute class weights for imbalanced data ---
+    use_class_weights = OmegaConf.select(cfg, 'train.use_class_weights', default=True)
+    class_weights = None
+    if use_class_weights:
+        from sklearn.utils.class_weight import compute_class_weight
+        labels = train_df[LABEL_COL].values
+        # Compute balanced class weights (inverse frequency)
+        class_weights = compute_class_weight('balanced', classes=np.arange(NUM_CLASSES), y=labels)
+        class_weights = torch.tensor(class_weights, dtype=torch.float32)
+        log.info(f"Using class weights: {class_weights.tolist()}")
+    
     # Instantiate Method
     log.info(f"Instantiating Method: {cfg.method._target_}")
     method = hydra.utils.instantiate(
         cfg.method, 
         model=model, 
-        num_classes=NUM_CLASSES
+        num_classes=NUM_CLASSES,
+        class_weights=class_weights
     )
     
     # Device
