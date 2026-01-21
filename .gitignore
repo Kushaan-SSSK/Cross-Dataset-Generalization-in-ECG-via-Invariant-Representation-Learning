@@ -92,3 +92,18 @@ runs/
 
 # temporary autofix scripts
 scripts/autofix_*.py
+
+# Local runs / outputs
+outputs/
+archive/
+logs/
+wandb/
+
+# Datasets / WFDB
+WFDBRecords/
+records500/
+data/
+
+# Python cache
+__pycache__/
+*.pyc
